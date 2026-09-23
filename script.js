@@ -577,44 +577,25 @@ async function handleBranchChange(branchCode) {
   stationSelect.disabled = true;
   stationSelect.innerHTML = '<option value="">-- กำลังโหลดข้อมูล... --</option>';
 
-  if (typeof google !== 'undefined' && google.script) {
-      google.script.run
-        .withSuccessHandler((res) => {
-          showLoading(false);
-          hideAlert(); 
-          if (res && res.success) {
-            const stations = res.data.stations || [];
-            AppState.stationsCache.set(branchCode, stations); 
-            populateStationDropdown(stations);
-          } else {
-            showAlert('error', res.message || 'ไม่สามารถโหลดข้อมูลสถานที่เลือกตั้งได้');
-            stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาดในการโหลดข้อมูล --</option>';
-          }
-        })
-        .withFailureHandler((err) => {
-          showLoading(false);
-          const errorMsg = err.message || err || 'ไม่ทราบสาเหตุ';
-          showAlert('error', 'ระบบขัดข้อง: ' + errorMsg);
-          stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาดในการโหลดข้อมูล --</option>';
-        })
-        .apiGetStationsByBranch(branchCode);
-  } else {
-      try {
-          const res = await API.call('apiGetStationsByBranch', { branchCode: branchCode });
-          showLoading(false);
-          if (res && res.success) {
-            const stations = res.data.stations || [];
-            AppState.stationsCache.set(branchCode, stations); 
-            populateStationDropdown(stations);
-          } else {
-            showAlert('error', 'ไม่สามารถโหลดข้อมูลสถานที่เลือกตั้งได้');
-            stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาด --</option>';
-          }
-      } catch (err) {
-          showLoading(false);
-          showAlert('error', 'ระบบขัดข้อง');
-          stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาด --</option>';
+  // โค้ดเดิมจะเช็คว่าอยู่บน GAS หรือไม่ คราวนี้เราบังคับให้ยิงผ่าน API อย่างเดียวเลย
+  try {
+      // ยิง API ไปที่ฟังก์ชัน apiGetStationsByBranch พร้อมส่ง branchCode ไปด้วย
+      const res = await API.call('apiGetStationsByBranch', branchCode); 
+      
+      showLoading(false);
+      
+      if (res && res.success) {
+        const stations = res.data.stations || [];
+        AppState.stationsCache.set(branchCode, stations); 
+        populateStationDropdown(stations);
+      } else {
+        showAlert('error', res ? res.message : 'ไม่สามารถโหลดข้อมูลสถานที่เลือกตั้งได้');
+        stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาดในการโหลดข้อมูล --</option>';
       }
+  } catch (err) {
+      showLoading(false);
+      showAlert('error', 'ระบบขัดข้อง: ' + err.message);
+      stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาด --</option>';
   }
 }
 
