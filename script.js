@@ -30,17 +30,15 @@ let captchaAnswer = ''; // เก็บคำตอบ Captcha ไว้ตร�
 const API = {
   call: async function(action, payload = null) {
       // 👇 นำ Web App URL ของคุณมาใส่ตรงนี้
-      const GAS_URL = 'https://script.google.com/macros/s/AKfycbxtCEPUo2J9jCFEU3YNk7Dn6ek183EOqiOrmdaedMfW/dev'; 
+      const GAS_URL = 'https://script.google.com/macros/s/AKfycbziLloGu8QIX6-IJpJi01k25R8cAG-bakNAFiHZcwgWpJJuHFLY8-02k25d2dbp_FyGDg/exec'; 
       
       try {
-          // Google Apps Script บังคับให้ใช้ redirect mode สำหรับการรับข้อมูล JSON กลับมา
           const response = await fetch(GAS_URL, {
               method: 'POST',
               headers: {
-                  'Content-Type': 'text/plain;charset=utf-8',
+                  'Content-Type': 'text/plain;charset=utf-8', // ป้องกัน CORS Preflight
               },
-              body: JSON.stringify({ action: action, payload: payload }),
-              redirect: 'follow' // 👈 สำคัญมาก: อนุญาตให้ตาม Redirect ของ Google ไปรับข้อมูล
+              body: JSON.stringify({ action: action, payload: payload })
           });
           
           if (!response.ok) {
@@ -52,7 +50,7 @@ const API = {
           
       } catch (error) {
           console.error("API Error [Action: " + action + "]:", error);
-          throw new Error("การเชื่อมต่อเซิร์ฟเวอร์ขัดข้อง: " + error.message);
+          throw new Error("การเชื่อมต่อเซิร์ฟเวอร์ขัดข้อง กรุณาตรวจสอบ Network");
       }
   }
 };
@@ -482,68 +480,34 @@ async function fetchRequestId() {
 // ==========================================
 
 async function loadInitialReferenceData() {
-  showLoading(true, 'กำลังตรวจสอบสถานะระบบ...');
+  showLoading(true, 'กำลังเชื่อมต่อระบบส่วนกลาง...');
   
-  if (typeof google !== 'undefined' && google.script) {
-       // รันแบบ Google Apps Script (Fallback)
-       google.script.run
-        .withSuccessHandler((statusRes) => {
-          if (statusRes && statusRes.success && statusRes.status === 'closed') {
-            showLoading(false);
-            const formSection = document.getElementById('formSection');
-            const closedMessage = document.getElementById('closedSystemMessage');
-            if (formSection) formSection.classList.add('hidden');
-            if (closedMessage) closedMessage.classList.remove('hidden');
-          } else {
-            showLoading(true, 'กำลังโหลดข้อมูลหน่วยงาน สปส....');
-            google.script.run
-              .withSuccessHandler((res) => {
-                showLoading(false);
-                if (res && res.success && res.data && res.data.branches) {
-                  AppState.branches = res.data.branches;
-                  populateBranchDropdown(res.data.branches);
-                } else {
-                  showAlert('error', res ? res.message : 'ไม่สามารถโหลดข้อมูลหน่วยงาน สปส. ได้');
-                }
-              })
-              .withFailureHandler((err) => {
-                showLoading(false);
-                const errorMsg = err.message || err || 'ไม่ทราบสาเหตุ';
-                showAlert('error', 'การเชื่อมต่อระบบล้มเหลว: ' + errorMsg);
-              })
-              .apiGetInitialData();
-          }
-        })
-        .withFailureHandler((err) => {
+  try {
+      // 1. ตรวจสอบสถานะระบบก่อน
+      const statusRes = await API.call('apiGetSystemStatus');
+      
+      if (statusRes && statusRes.success && statusRes.status === 'closed') {
           showLoading(false);
-          const errorMsg = err.message || err || 'ไม่ทราบสาเหตุ';
-          showAlert('error', 'ไม่สามารถตรวจสอบสถานะระบบได้: ' + errorMsg);
-          document.getElementById('formSection').classList.remove('hidden');
-        })
-        .apiGetSystemStatus();
-  } else {
-      // รันแบบ Standalone API
-      try {
-          const statusRes = await API.call('apiGetSystemStatus');
-          if (statusRes && statusRes.success && statusRes.status === 'closed') {
-              showLoading(false);
-              document.getElementById('formSection').classList.add('hidden');
-              document.getElementById('closedSystemMessage').classList.remove('hidden');
-          } else {
-              showLoading(true, 'กำลังโหลดข้อมูลหน่วยงาน สปส....');
-              const res = await API.call('apiGetInitialData');
-              showLoading(false);
-              if (res && res.success && res.data && res.data.branches) {
-                  AppState.branches = res.data.branches;
-                  populateBranchDropdown(res.data.branches);
-              } else {
-                  showAlert('error', 'ไม่สามารถโหลดข้อมูลหน่วยงาน สปส. ได้');
-              }
-          }
-      } catch (err) {
-          showLoading(false);
-          showAlert('error', 'ไม่สามารถตรวจสอบสถานะระบบได้ (ต้องติดตั้ง API ก่อน)');
+          document.getElementById('formSection').classList.add('hidden');
+          document.getElementById('closedSystemMessage').classList.remove('hidden');
+          return; // หยุดการทำงานถ้าปิดระบบ
+      } 
+      
+      // 2. ถ้าระบบเปิด ให้โหลดข้อมูล สปส.
+      showLoading(true, 'กำลังโหลดข้อมูลหน่วยงาน สปส....');
+      const res = await API.call('apiGetInitialData');
+      showLoading(false);
+      
+      if (res && res.success && res.data && res.data.branches) {
+          AppState.branches = res.data.branches;
+          populateBranchDropdown(res.data.branches);
+      } else {
+          showAlert('error', 'ไม่สามารถโหลดข้อมูลหน่วยงาน สปส. ได้');
+          console.error("Data error:", res);
       }
+  } catch (err) {
+      showLoading(false);
+      showAlert('error', 'ข้อผิดพลาดเครือข่าย: ' + err.message);
   }
 }
 
