@@ -29,25 +29,30 @@ let captchaAnswer = ''; // เก็บคำตอบ Captcha ไว้ตร�
 // 💡 ---------------------------------------------------------
 const API = {
   call: async function(action, payload = null) {
-      // 👇 นำ Web App URL ของคุณมาใส่ตรงนี้ให้อยู่ในเครื่องหมายคำพูด
-      const GAS_URL = 'https://script.google.com/macros/s/AKfycbziLloGu8QIX6-IJpJi01k25R8cAG-bakNAFiHZcwgWpJJuHFLY8-02k25d2dbp_FyGDg/exec';    
+      // 👇 นำ Web App URL ของคุณมาใส่ตรงนี้
+      const GAS_URL = 'https://script.google.com/macros/s/AKfycbxtCEPUo2J9jCFEU3YNk7Dn6ek183EOqiOrmdaedMfW/dev'; 
+      
       try {
+          // Google Apps Script บังคับให้ใช้ redirect mode สำหรับการรับข้อมูล JSON กลับมา
           const response = await fetch(GAS_URL, {
               method: 'POST',
-              // ใช้ text/plain เพื่อป้องกันปัญหา CORS Preflight บล็อกการเชื่อมต่อ
               headers: {
-                  'Content-Type': 'text/plain;charset=utf-8'
+                  'Content-Type': 'text/plain;charset=utf-8',
               },
-              body: JSON.stringify({ action: action, payload: payload })
+              body: JSON.stringify({ action: action, payload: payload }),
+              redirect: 'follow' // 👈 สำคัญมาก: อนุญาตให้ตาม Redirect ของ Google ไปรับข้อมูล
           });
-            const result = await response.json();    
+          
           if (!response.ok) {
-              throw new Error(result.message || 'การตอบสนองเครือข่ายผิดปกติ');
-          }        
+              throw new Error(`HTTP Error: ${response.status}`);
+          }
+
+          const result = await response.json();
           return result;
+          
       } catch (error) {
-          console.error("API Error:", error);
-          throw new Error("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้: " + error.message);
+          console.error("API Error [Action: " + action + "]:", error);
+          throw new Error("การเชื่อมต่อเซิร์ฟเวอร์ขัดข้อง: " + error.message);
       }
   }
 };
