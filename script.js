@@ -25,17 +25,30 @@ const AppStateStatus = {
 let captchaAnswer = ''; // เก็บคำตอบ Captcha ไว้ตรวจสอบ
 
 // 💡 ---------------------------------------------------------
-// 💡 ส่วนตั้งค่า API URL (สำหรับเปลี่ยนไปชี้ Backend ตัวใหม่ในอนาคต)
-// 💡 ปัจจุบันตั้งค่าจำลองโครงสร้างเดิมของ google.script.run ไว้
+// 💡 ส่วนตั้งค่า API URL (เชื่อมต่อกับ Google Apps Script Backend)
 // 💡 ---------------------------------------------------------
 const API = {
-  // ฟังก์ชันจำลองโครงสร้าง google.script.run เพื่อให้โค้ดเก่าทำงานได้โดยแก้น้อยที่สุด
   call: async function(action, payload = null) {
-      // ⚠️ ในอนาคต ให้เปลี่ยนโค้ดด้านล่างเป็นการยิง fetch() ไปหา Cloudflare Workers แทน
-      // ตัวอย่าง: return await fetch('https://your-worker.workers.dev/' + action, { method: 'POST', body: JSON.stringify(payload) }).then(res => res.json());
-      
-      console.warn("API Function called but not fully implemented for standalone host yet:", action);
-      throw new Error(`ฟังก์ชัน ${action} ยังไม่ได้เชื่อมต่อกับ Backend ใหม่ กรุณาตั้งค่า API URL`);
+      // 👇 นำ Web App URL ของคุณมาใส่ตรงนี้ให้อยู่ในเครื่องหมายคำพูด
+      const GAS_URL = 'https://script.google.com/macros/s/AKfycbziLloGu8QIX6-IJpJi01k25R8cAG-bakNAFiHZcwgWpJJuHFLY8-02k25d2dbp_FyGDg/exec';    
+      try {
+          const response = await fetch(GAS_URL, {
+              method: 'POST',
+              // ใช้ text/plain เพื่อป้องกันปัญหา CORS Preflight บล็อกการเชื่อมต่อ
+              headers: {
+                  'Content-Type': 'text/plain;charset=utf-8'
+              },
+              body: JSON.stringify({ action: action, payload: payload })
+          });
+            const result = await response.json();    
+          if (!response.ok) {
+              throw new Error(result.message || 'การตอบสนองเครือข่ายผิดปกติ');
+          }        
+          return result;
+      } catch (error) {
+          console.error("API Error:", error);
+          throw new Error("ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้: " + error.message);
+      }
   }
 };
 
@@ -47,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // ⚠️ ปิด loadInitialReferenceData ไว้ก่อนชั่วคราว หากนำไปรันบน GitHub Pages ทันทีโดยยังไม่แก้ API
   // หาก Backend พร้อมแล้วค่อยเปิดบรรทัดล่างนี้ครับ
-  // loadInitialReferenceData(); 
+   loadInitialReferenceData(); 
   
   generateCaptcha(); // สร้าง Captcha ครั้งแรกเมื่อโหลด
 });
