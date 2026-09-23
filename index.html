@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบขอ User สำหรับระบบตรวจสอบสิทธิซ้ำซ้อนของผู้มีสิทธิเลือกตั้งบอร์ดประกันสังคม</title>
+    
+    <!-- Google Fonts: Sarabun และ Prompt -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@400;500;600&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Sarabun', 'sans-serif'],
+                        heading: ['Prompt', 'sans-serif'],
+                    },
+                    colors: {
+                        govblue: {
+                            50: '#f0f5fa',
+                            100: '#e1ecf5',
+                            500: '#3b82f6',
+                            800: '#1e40af', 
+                            900: '#152b75', 
+                        },
+                        govgray: {
+                            50: '#f8fafc',
+                            100: '#f1f5f9',
+                            200: '#e2e8f0',
+                            300: '#cbd5e1',
+                            500: '#64748b',
+                            700: '#334155',
+                            900: '#0f172a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- 💡 ลิงก์ไฟล์ CSS ภายนอก (แทนที่ <?!= include('Styles'); ?>) -->
+    <link rel="stylesheet" href="style.css">
+    
+    <style>
+        /* Custom Input Styling */
+        input:focus, select:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.1);
+        }
+        .upload-zone {
+            transition: all 0.2s ease;
+        }
+        .upload-zone:hover {
+            border-color: #1e40af;
+            background-color: #f0f5fa;
+        }
+        /* Custom Scrollbar สำหรับ Modal */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f8fafc; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-govgray-50 text-govgray-900 font-sans antialiased min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-govblue-900 shadow-md">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <div class="w-12 h-12 bg-white rounded-full flex items-center justify-center text-govblue-900 font-bold text-xl shadow-inner border-2 border-govblue-100 shrink-0">
+                    สปส
+                </div>
+                <div>
+                    <h1 class="font-heading font-semibold text-white text-lg tracking-wide">
+                        สำนักงานประกันสังคม
+                    </h1>
+                    <p class="text-govblue-100 text-sm font-light mt-0.5 hidden sm:block">
+                        ระบบขอ User ตรวจสอบสิทธิซ้ำซ้อนของผู้มีสิทธิเลือกตั้งผู้แทนฝ่ายนายจ้างและฝ่ายผู้ประกันตน
+                    </p>
+                </div>
+            </div>
+            <div class="hidden md:block">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-govblue-800 text-white border border-govblue-500 shadow-sm">
+                    ระบบรับคำขอออนไลน์
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-4xl mx-auto w-full px-4 py-8">
+        
+        <!-- Tabs Menu -->
+        <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 bg-govgray-200/70 p-1.5 rounded-lg mb-6 shadow-inner">
+            
+            <!-- 1. ปุ่ม ยื่นแบบคำขอ (หน้าฟอร์ม) -->
+            <button id="tabForm" onclick="switchTab('form')" class="flex-1 py-3 text-[14px] sm:text-[15px] font-heading font-semibold rounded-md bg-white text-govblue-900 shadow-sm transition-all flex justify-center items-center gap-1 sm:gap-2">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                </svg>
+                <span>ยื่นแบบคำขอ</span>
+            </button>
+            
+            <!-- 2. ปุ่ม สอบถามสถานะ (ระบบ 1) -->
+            <button id="tabStatus" onclick="switchTab('status')" class="flex-1 py-3 text-[14px] sm:text-[15px] font-heading font-semibold rounded-md text-govgray-600 hover:text-govblue-800 hover:bg-white/50 transition-all flex justify-center items-center gap-1 sm:gap-2">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+                <span>สอบถามสถานะ 1</span>
+            </button>
+
+            <!-- 3. ปุ่ม สอบถามสถานะ (ระบบ 2) -->
+            <button id="tabStatus2" onclick="window.open('https://script.google.com/macros/s/AKfycbw7jBQtR7uHLP1Q74CChA-NZfY1CiC4XzQ3ACZsDnJUCkLNfvDWzTkw_SCMVtsvpWXm/exec', '_blank')" class="flex-1 py-3 text-[14px] sm:text-[15px] font-heading font-semibold rounded-md text-govgray-600 hover:text-govblue-800 hover:bg-white/50 transition-all flex justify-center items-center gap-1 sm:gap-2">
+                <svg class="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                </svg>
+                <span>สอบถามสถานะกรณี "ลืมรหัสคำขอ"</span>
+            </button>
+
+        </div>
+
+        <!-- Global Alert Box -->
+        <div id="alertBox" class="hidden mb-6 p-4 rounded-md border text-[15px] flex items-start space-x-3 shadow-sm" role="alert">
+            <div id="alertIcon" class="flex-shrink-0 mt-0.5"></div>
+            <div id="alertMessage" class="flex-grow font-medium leading-relaxed"></div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- ส่วนที่ 1: หน้าฟอร์มยื่นคำขอ -->
+        <!-- ========================================== -->
+        <div id="sectionForm">
+            <!-- ป้ายประกาศปิดระบบ -->
+            <div id="closedSystemMessage" class="hidden mb-8 bg-red-50 rounded-xl shadow-sm border-l-4 border-red-500 p-8 flex flex-col items-center justify-center text-center">
+                <div class="w-16 h-16 bg-white text-red-500 rounded-full flex items-center justify-center shadow-sm mb-4">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                </div>
+                <h2 class="font-heading font-semibold text-2xl text-red-800 mb-2">ปิดรับแบบคำขอสิทธิ์เข้าใช้งานระบบขอ User ตรวจสอบสิทธิซ้ำซ้อนของผู้มีสิทธิเลือกตั้งผู้แทนฝ่ายนายจ้างและฝ่ายผู้ประกันตน</h2>
+                <p class="text-[16px] text-red-700 leading-relaxed max-w-lg">
+                    สามารถเข้าไปตรวจสอบ username และ password ได้ที่เมนู <br> "สอบถามสถานะ1" หรือ "สอบถามสถานะ 2" <br>
+                    <span class="block mt-2 font-medium text-red-900">หากมีข้อสงสัย กรุณาติดต่อ โทร. 02-956-2357, 56, 62</span>
+                </p>
+            </div>
+            <div id="formSection" class="bg-white rounded-xl shadow-sm border border-govgray-200 overflow-hidden">
+                <div class="px-6 py-5 bg-govgray-50 border-b border-govgray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <div>
+                        <h2 class="font-heading font-semibold text-lg text-govblue-900">แบบคำขอสิทธิ์เข้าใช้งานระบบตรวจสอบสิทธิซ้ำซ้อน</h2>
+                        <p class="text-sm text-govgray-500 mt-1">กรุณากรอกข้อมูลให้ครบถ้วนและถูกต้องตามความเป็นจริง</p>
+                    </div>
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-red-50 text-red-700 border border-red-100 shrink-0">
+                        <span class="text-red-500 mr-1">*</span> จำเป็นต้องกรอก
+                    </span>
+                </div>
+
+                <form id="userRequestForm" class="p-6 space-y-6" novalidate onsubmit="return false;">
+                    <div>
+                        <label for="citizenId" class="block text-[15px] font-medium text-govgray-700 mb-1">เลขประจำตัวประชาชน <span class="text-red-500">*</span></label>
+                        <input type="text" id="citizenId" maxlength="13" inputmode="numeric" placeholder="ตัวเลข 13 หลัก ไม่ต้องใส่ขีด" 
+                               class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] placeholder-govgray-400 focus:border-govblue-800 transition-colors" required>
+                        <p class="mt-1.5 text-xs text-govgray-500">ต้องเป็นตัวเลข 13 หลักที่ถูกต้องตามทะเบียนราษฎร์</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label for="firstname" class="block text-[15px] font-medium text-govgray-700 mb-1">ชื่อ <span class="text-red-500">*</span></label>
+                            <input type="text" id="firstname" placeholder="ชื่อจริงไม่ต้องระบุคำนำหน้า" 
+                                   class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] placeholder-govgray-400 focus:border-govblue-800 transition-colors" required>
+                        </div>
+                        <div>
+                            <label for="lastname" class="block text-[15px] font-medium text-govgray-700 mb-1">นามสกุล <span class="text-red-500">*</span></label>
+                            <input type="text" id="lastname" placeholder="นามสกุล" 
+                                   class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] placeholder-govgray-400 focus:border-govblue-800 transition-colors" required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                        <div>
+                            <label for="firstnameEn" class="block text-[15px] font-medium text-govgray-700 mb-1">ชื่อ (ภาษาอังกฤษ) <span class="text-red-500">*</span></label>
+                            <input type="text" id="firstnameEn" placeholder="ตัวพิมพ์เล็กเท่านั้น (เช่น somchai)" 
+                                  class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] placeholder-govgray-400 focus:border-govblue-800 transition-colors" required>
+                        </div>
+                        <div>
+                            <label for="lastnameEn" class="block text-[15px] font-medium text-govgray-700 mb-1">นามสกุล (ภาษาอังกฤษ) <span class="text-red-500">*</span></label>
+                            <input type="text" id="lastnameEn" placeholder="ตัวพิมพ์เล็กเท่านั้น" 
+                                  class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] placeholder-govgray-400 focus:border-govblue-800 transition-colors" required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label for="email" class="block text-[15px] font-medium text-govgray-700 mb-1">อีเมลทางการ <span class="text-red-500">*</span></label>
+                            <input type="email" id="email" placeholder="example@sso.go.th" 
+                                   class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] placeholder-govgray-400 focus:border-govblue-800 transition-colors" required>
+                        </div>
+                        <div>
+                            <label for="phone" class="block text-[15px] font-medium text-govgray-700 mb-1">เบอร์โทรศัพท์ <span class="text-red-500">*</span></label>
+                            <input type="tel" id="phone" maxlength="10" inputmode="numeric" placeholder="0812345678" 
+                                   class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] placeholder-govgray-400 focus:border-govblue-800 transition-colors" required>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="ssoBranchCode" class="block text-[15px] font-medium text-govgray-700 mb-1">สำนักงานประกันสังคมรับผิดชอบ <span class="text-red-500">*</span></label>
+                        <div class="relative">
+                            <select id="ssoBranchCode" class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] focus:border-govblue-800 transition-colors appearance-none" required>
+                                <option value="">-- กำลังโหลดรายชื่อหน่วยงาน สปส. --</option>
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-govgray-500">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="pollingStationId" class="block text-[15px] font-medium text-govgray-700 mb-1">สถานที่เลือกตั้ง <span class="text-red-500">*</span><span class="text-red-500 text-xs"> เลือกสถานที่ใดสถานที่หนึ่งภายใต้อำเภอที่ได้รับมอบหมายให้ปฏิบัติหน้าที่</span></label>
+                        <div class="relative">
+                            <select id="pollingStationId" disabled class="w-full px-4 py-2.5 bg-govgray-100 border border-govgray-300 rounded-md text-govgray-500 text-[15px] cursor-not-allowed appearance-none" required>
+                                <option value="">-- กรุณาเลือกสปส.รับผิดชอบ ก่อน --</option>
+                            </select>
+                            <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-govgray-500">
+                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </div>
+                        </div>
+
+                        <div id="stationDetailBox" class="hidden mt-3 p-4 bg-govblue-50 border border-govblue-100 rounded-md text-[13px] space-y-1.5 text-govgray-700">
+                            <div class="font-semibold text-govblue-900 text-[14px]" id="detailStationName">-</div>
+                            <div><strong>สถานที่ตั้ง:</strong> <span id="detailLocation">-</span></div>
+                            <div><strong>ที่อยู่:</strong> ตำบล <span id="detailTambon">-</span> อำเภอ <span id="detailAmphur">-</span> จังหวัด <span id="detailProvince">-</span></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex flex-col sm:flex-row sm:justify-between sm:items-end mb-2 gap-2">
+                            <label class="block text-[15px] font-medium text-govgray-700">แนบเอกสารข้อตกลงรักษาความลับ (NDA) <span class="text-red-500">*</span></label>
+                            <a href="https://drive.google.com/file/d/1JJwBCHr4ATb2YGaeUa-OqZHVG0GmOC3L/view?usp=sharing" 
+                              target="_blank" rel="noopener noreferrer" 
+                              class="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-white hover:bg-govblue-50 border border-govblue-200 text-govblue-800 text-[13px] font-medium rounded-md transition shadow-sm w-fit">
+                                <svg class="w-4 h-4 text-govblue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                <span>ดาวน์โหลดตัวอย่างเอกสาร NDA</span>
+                            </a>
+                        </div>
+                        
+                        <div class="upload-zone border-2 border-dashed border-govgray-300 bg-govgray-50/50 rounded-lg p-6 text-center cursor-pointer">
+                            <input type="file" id="ndaFile" class="hidden" accept=".pdf,image/jpeg,image/png,image/jpg" multiple>
+                            <label for="ndaFile" class="cursor-pointer flex flex-col items-center">
+                                <svg class="w-10 h-10 text-govblue-800 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                <span class="text-[15px] font-medium text-govblue-800 underline underline-offset-2 hover:text-govblue-900">คลิกเพื่อเลือกไฟล์เอกสาร NDA</span>
+                                <span class="text-[13px] text-govgray-500 mt-2 leading-relaxed">รองรับไฟล์ PDF (1 ไฟล์) หรือ รูปภาพ JPG/PNG (เลือกได้หลายไฟล์)<br>ขนาดรวมไม่เกิน 10 MB</span>
+                            </label>
+                            <div id="selectedFileInfo" class="hidden mt-4 inline-flex items-center px-3 py-1.5 rounded-full text-[13px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span id="fileNameLabel">ชื่อไฟล์</span>
+                                <button type="button" id="removeFileBtn" class="ml-2 text-emerald-900 hover:text-emerald-950 font-bold">&times;</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="pt-6 border-t border-govgray-200 flex justify-end">
+                        <button type="button" id="btnValidate" class="w-full md:w-auto px-8 py-2.5 bg-govblue-800 hover:bg-govblue-900 text-white font-medium text-[15px] rounded-md shadow-sm transition-colors flex items-center justify-center space-x-2">
+                            <span>ตรวจสอบข้อมูล</span>
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Success Screen -->
+            <div id="successSection" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 overflow-hidden text-center p-8 sm:p-12">
+                <div class="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-emerald-100">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                </div>
+                <h2 class="font-heading text-2xl font-semibold text-govgray-900 mb-2">ส่งคำขอสำเร็จ</h2>
+                <p class="text-[15px] text-govgray-500 mb-8">ระบบได้รับคำขอเปิดสิทธิ์ใช้งานของคุณเรียบร้อยแล้ว</p>
+                <div class="max-w-md mx-auto bg-govgray-50 border border-govgray-200 rounded-lg p-6 mb-8">
+                    <div class="text-[13px] uppercase tracking-wider text-govgray-500 font-semibold mb-2">Request ID (รหัสอ้างอิงคำขอ)</div>
+                    <div id="displayRequestId" class="text-2xl sm:text-3xl font-mono font-bold text-govblue-900 tracking-wider mb-4 select-all">re-ddmmyyyy-xxxxxx</div>
+                    <button type="button" id="btnCopyRequestId" class="inline-flex items-center space-x-1.5 px-4 py-2 bg-white hover:bg-govblue-50 border border-govblue-200 text-govblue-800 text-[13px] font-medium rounded-md transition shadow-sm">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                        <span id="copyBtnText">คัดลอก Request ID</span>
+                    </button>
+                </div>
+                <p class="text-[13px] text-govgray-500 mb-8 max-w-md mx-auto">กรุณาบันทึกหรือถ่ายภาพหน้าจอที่มี Request ID นี้ไว้สำหรับติดต่อเจ้าหน้าที่หรือใช้ติดตามสถานะการเปิดบัญชีผู้ใช้</p>
+                <div>
+                    <button type="button" id="btnResetForm" class="px-8 py-2.5 bg-govblue-800 hover:bg-govblue-900 text-white text-[15px] font-medium rounded-md shadow-sm transition">กลับหน้าหลัก / ทำรายการใหม่</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- ส่วนที่ 2: หน้าสอบถามสถานะคำขอ -->
+        <!-- ========================================== -->
+        <div id="sectionStatus" class="hidden">
+            <div class="bg-white rounded-xl shadow-sm border border-govgray-200 overflow-hidden">
+                <div class="px-6 py-5 bg-govblue-50 border-b border-govblue-100 flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-govblue-800 shadow-sm">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <div>
+                        <h2 class="font-heading font-semibold text-lg text-govblue-900">ตรวจสอบสถานะการอนุมัติ</h2>
+                        <p class="text-sm text-govgray-600 mt-0.5">กรุณากรอกรหัสอ้างอิงและเบอร์โทรศัพท์เพื่อตรวจสอบสถานะ</p>
+                    </div>
+                </div>
+                
+                <div class="p-6 space-y-5">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-[15px] font-medium text-govgray-700 mb-1">รหัสคำขอ (Request ID)<span class="text-red-500"> *</span></label>
+                            <input type="text" id="searchReqId" placeholder="เช่น re-07092026-000001" 
+                                   class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] focus:border-govblue-800 transition-colors">
+                            
+                            <!-- ✅ Checkbox สำหรับผู้ที่ลืม Request ID -->
+                            <div class="mt-3 flex items-center">
+                                <input type="checkbox" id="chkForgotId" class="w-4 h-4 text-govblue-600 rounded border-govgray-300 cursor-pointer focus:ring-govblue-500">
+                                <label for="chkForgotId" class="ml-2 text-[15px] text-govgray-700 cursor-pointer font-medium select-none">จำรหัสคำขอ (Request ID) ไม่ได้?</label>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-[15px] font-medium text-govgray-700 mb-1">เบอร์โทรศัพท์ที่ลงทะเบียน<span class="text-red-500"> *</span></label>
+                            <input type="tel" id="searchPhone" maxlength="10" placeholder="0812345678" 
+                                   class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] focus:border-govblue-800 transition-colors">
+                        </div>
+                    </div>
+
+                    <!-- ✅ กล่องซ่อนสำหรับกรอก 13 หลักพร้อมระบบ Privacy Masking -->
+                    <div id="forgotIdContainer" class="hidden p-5 bg-govgray-50 rounded-lg border border-govgray-200 space-y-4">
+                        <div class="text-[15px] font-bold text-govblue-900 flex items-center gap-2">
+                            <svg class="w-4 h-4 text-govblue-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+                            <span>ระบบค้นหารหัสคำขออัตโนมัติด้วยเลขประจำตัวประชาชน</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                            <div class="md:col-span-2">
+                                <label class="block text-[14px] font-medium text-govgray-600 mb-1.5">เลขประจำตัวประชาชน 13 หลัก</label>
+                                <input type="text" id="lookupCitizenId" maxlength="13" placeholder="ตัวเลข 13 หลัก" 
+                                       class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-[15px] font-mono tracking-widest text-center focus:border-govblue-800 transition-colors">
+                            </div>
+                            <div>
+                                <button type="button" id="btnFetchReqId" class="w-full py-2.5 bg-govblue-800 hover:bg-govblue-900 text-white text-[15px] font-semibold rounded-md shadow-sm transition-colors flex justify-center items-center gap-2">
+                                    ดึงรหัสคำขอ
+                                </button>
+                            </div>
+                        </div>
+                        <p class="text-[12px] text-govgray-500">*ระบบจะทำการพรางตัวเลขตรงกลางอัตโนมัติ (Privacy Masking) เพื่อความปลอดภัยตามมาตรฐาน PDPA</p>
+                    </div>
+                    
+                    <!-- ✅ CAPTCHA แบบสุ่มอักขระ -->
+                    <div class="bg-govgray-50 p-5 rounded-lg border border-govgray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+                        <div class="flex items-center space-x-4">
+                            <div class="p-2.5 bg-govgray-200 rounded-md text-govgray-600">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                            </div>
+                            <div>
+                                <span class="block text-[15px] font-medium text-govgray-700">ยืนยันตัวตน (พิมพ์ข้อความที่เห็น)</span>
+                                <div class="mt-1.5 bg-white px-5 py-2 border border-govgray-300 rounded-md font-mono text-xl font-bold text-govblue-800 tracking-[0.4em] shadow-inner inline-block select-none pointer-events-none" id="captchaDisplay">
+                                    a b 1 c d e
+                                </div>
+                            </div>
+                        </div>
+                        <input type="text" id="searchCaptcha" maxlength="6" placeholder="กรอกข้อความ" autocomplete="off"
+                              class="w-full sm:w-48 px-4 py-3 bg-white border border-govgray-300 rounded-md text-govgray-900 text-center text-[16px] focus:border-govblue-800 transition-colors shadow-sm font-mono tracking-widest">
+                    </div>
+
+                    <div class="pt-5 flex flex-col-reverse sm:flex-row justify-end border-t border-govgray-100 gap-3">
+                        <!-- ✅ ปุ่มล้างข้อมูล -->
+                        <button type="button" id="btnClearStatusForm" onclick="clearStatusForm()" class="w-full sm:w-auto px-6 py-2.5 bg-white hover:bg-govgray-100 border border-govgray-300 text-govgray-700 font-medium text-[15px] rounded-md shadow-sm transition-colors flex items-center justify-center space-x-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            <span>ล้างข้อมูล</span>
+                        </button>
+                        
+                        <!-- ✅ ปุ่มค้นหาข้อมูล -->
+                        <button type="button" id="btnSearchStatus" onclick="searchStatus()" class="w-full sm:w-auto px-8 py-2.5 bg-govblue-800 hover:bg-govblue-900 text-white font-medium text-[15px] rounded-md shadow-sm transition-colors flex items-center justify-center space-x-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            <span>ค้นหาข้อมูล</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Search Result Area (ซ่อนเริ่มต้น) -->
+            <div id="searchResultArea" class="hidden mt-6">
+                <!-- กรณีมี Username (อนุมัติแล้ว) -->
+                <div id="resultApproved" class="hidden bg-white rounded-xl shadow-sm border-2 border-emerald-400 overflow-hidden">
+                    <div class="bg-emerald-50 px-6 py-4 border-b border-emerald-100 flex items-center space-x-3">
+                        <div class="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-sm">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"></path></svg>
+                        </div>
+                        <h3 class="font-heading font-semibold text-emerald-900 text-lg">คำขออนุมัติเรียบร้อยแล้ว</h3>
+                    </div>
+                    <div class="p-6 text-[15px]">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                            <span class="sm:col-span-1 text-govgray-500 font-medium">สถานะ</span>
+                            <span class="sm:col-span-2 font-bold text-emerald-600 bg-emerald-100/50 px-3 py-1 rounded w-fit" id="resStatus">-</span>
+                        </div>
+
+                        <!-- แถว Username -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                          <span class="sm:col-span-1 text-govgray-500 font-medium">Username</span>
+                          <span class="sm:col-span-2 font-mono font-bold text-govblue-800 text-lg tracking-wide" id="resUsername">-</span>
+                        </div>
+                        
+                        <!-- แถว Password แบบซ่อน/แสดงได้ -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3 items-center">
+                            <span class="sm:col-span-1 text-govgray-500 font-medium">Password</span>
+                            <div class="sm:col-span-2 flex items-center space-x-3">
+                                <span class="font-mono font-bold text-govblue-800 text-lg tracking-wide select-all" id="resPassword" data-password="">••••••••</span>
+                                
+                                <button type="button" id="btnTogglePassword" class="text-govgray-400 hover:text-govblue-800 focus:outline-none transition-colors hidden" title="แสดง/ซ่อน รหัสผ่าน">
+                                    <!-- Icon: Eye Slash (ปิดตา) -->
+                                    <svg id="iconEyeOff" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21"></path>
+                                    </svg>
+                                    <!-- Icon: Eye (เปิดตา) - ซ่อนเป็นค่าเริ่มต้น -->
+                                    <svg id="iconEyeOn" class="w-5 h-5 hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- แถว หมายเหตุ -->
+                        <div id="rowRemark" class="hidden grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                            <span class="sm:col-span-1 text-govgray-500 font-medium">หมายเหตุ</span>
+                            <span class="sm:col-span-2 font-medium text-red-600" id="resRemark">-</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                            <span class="sm:col-span-1 text-govgray-500 font-medium">เลขบัตรประชาชน</span>
+                            <span class="sm:col-span-2 text-govgray-800 font-mono tracking-wider" id="resCitizenId">-</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                            <span class="sm:col-span-1 text-govgray-500 font-medium">ชื่อ - นามสกุล</span>
+                            <span class="sm:col-span-2 text-govgray-800" id="resName">-</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                          <span class="sm:col-span-1 text-govgray-500 font-medium">ชื่อ - นามสกุล (EN)</span>
+                          <span class="sm:col-span-2 text-govgray-800" id="resNameEn">-</span></div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                            <span class="sm:col-span-1 text-govgray-500 font-medium">อีเมล</span>
+                            <span class="sm:col-span-2 text-govgray-800" id="resEmail">-</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                            <span class="sm:col-span-1 text-govgray-500 font-medium">เบอร์โทรศัพท์</span>
+                            <span class="sm:col-span-2 text-govgray-800" id="resPhone">-</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                            <span class="sm:col-span-1 text-govgray-500 font-medium">สำนักงานประกันสังคมรับผิดชอบ</span>
+                            <span class="sm:col-span-2 text-govgray-800" id="resSso">-</span>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 pt-3">
+                            <span class="sm:col-span-1 text-govgray-500 font-medium">สถานที่เลือกตั้ง</span>
+                            <span class="sm:col-span-2 text-govgray-800" id="resStation">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- กรณีไม่มี Username (อยู่ระหว่างดำเนินการ) -->
+                <div id="resultPending" class="hidden bg-amber-50 rounded-xl shadow-sm border-l-4 border-l-amber-400 border-y border-r border-amber-200 p-6 flex items-start space-x-4">
+                    <div class="w-10 h-10 bg-white text-amber-600 rounded-full flex items-center justify-center shrink-0 shadow-sm">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    </div>
+                    <div>
+                        <h3 class="font-heading font-semibold text-amber-900 text-lg mb-1.5">สถานะ: อยู่ระหว่างดำเนินการ</h3>
+                        <p class="text-[15px] text-amber-800 leading-relaxed">
+                            สำนักงานประกันสังคมได้รับคำขอแล้ว ขณะนี้อยู่ระหว่างดำเนินการจัดทำ Username และกำหนดสิทธิเข้าใช้งาน <br>
+                            <span class="block mt-2 font-medium text-amber-900">หากมีข้อสงสัย โทร. 02-956-2357, 56, 62</span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Overlay Modal -->
+        <div id="loadingOverlay" class="hidden fixed inset-0 z-[60] bg-govgray-900/60 backdrop-blur-sm flex flex-col items-center justify-center p-4">
+            <div class="bg-white p-6 rounded-xl shadow-xl flex flex-col items-center space-y-4 max-w-xs w-full text-center">
+                <div class="w-12 h-12 border-4 border-govblue-100 border-t-govblue-800 rounded-full animate-spin"></div>
+                <div id="loadingText" class="text-[15px] font-medium text-govgray-800">กำลังประมวลผล...</div>
+            </div>
+        </div>
+
+        <!-- Preview Modal -->
+        <div id="previewModal" class="hidden fixed inset-0 z-50 overflow-y-auto bg-govgray-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+            <div class="bg-white rounded-xl shadow-xl max-w-lg w-full overflow-hidden border border-govgray-200 transform transition-all">
+                <div class="px-6 py-4 bg-govblue-900 text-white flex justify-between items-center">
+                    <h3 class="font-heading font-semibold text-lg">ยืนยันข้อมูลคำขอเข้าใช้งาน</h3>
+                    <span class="text-xs bg-govblue-800 px-2.5 py-1 rounded border border-govblue-500 shadow-inner">ขั้นตอนที่ 2 / 2</span>
+                </div>
+                <div class="p-6 space-y-4 text-[15px]">
+                    <p class="text-sm text-govgray-500">กรุณาตรวจสอบความถูกต้องของข้อมูลทั้งหมดก่อนทำการยืนยันและส่งคำขอ</p>
+                    <div class="bg-govgray-50 p-5 rounded-lg border border-govgray-200 space-y-3.5">
+                        <div class="flex justify-between border-b border-govgray-200 pb-2">
+                            <span class="text-govgray-500">เลขประจำตัวประชาชน</span>
+                            <span id="prevCitizenId" class="font-bold text-govgray-900 tracking-wider">1-xxxx-xxxxx-xx-3</span>
+                        </div>
+                        <div class="flex justify-between border-b border-govgray-200 pb-2">
+                            <span class="text-govgray-500">ชื่อ - นามสกุล (TH)</span>
+                            <span id="prevName" class="font-semibold text-govgray-900">-</span>
+                        </div>
+                        <div class="flex justify-between border-b border-govgray-200 pb-2">
+                            <span class="text-govgray-500">ชื่อ - นามสกุล (EN)</span>
+                            <span id="prevNameEn" class="font-semibold text-govgray-900">-</span>
+                        </div>
+                        <div class="flex justify-between border-b border-govgray-200 pb-2">
+                            <span class="text-govgray-500">อีเมล</span>
+                            <span id="prevEmail" class="text-govgray-900">-</span>
+                        </div>
+                        <div class="flex justify-between border-b border-govgray-200 pb-2">
+                            <span class="text-govgray-500">เบอร์โทรศัพท์</span>
+                            <span id="prevPhone" class="text-govgray-900">-</span>
+                        </div>
+                        <div class="flex justify-between border-b border-govgray-200 pb-2">
+                            <span class="text-govgray-500">รหัส สปส.</span>
+                            <span id="prevSsoBranch" class="font-semibold text-govblue-800">-</span>
+                        </div>
+                        <div class="flex justify-between border-b border-govgray-200 pb-2">
+                            <span class="text-govgray-500">รหัสสถานที่เลือกตั้ง</span>
+                            <span id="prevPollingStation" class="font-semibold text-govblue-800">-</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-govgray-500">เอกสาร NDA ที่แนบ</span>
+                            <span id="prevFileName" class="text-[13px] font-mono bg-govgray-200 px-2 py-0.5 rounded text-govgray-700 truncate max-w-[180px] sm:max-w-[200px]">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="px-6 py-4 bg-govgray-50 border-t border-govgray-200 flex flex-col md:flex-row justify-end space-y-3 md:space-y-0 md:space-x-3">
+                    <button type="button" id="btnCancelPreview" class="px-5 py-2.5 bg-white hover:bg-govgray-100 border border-govgray-300 text-govgray-700 font-medium text-[15px] rounded-md transition w-full md:w-auto text-center">← กลับไปแก้ไขข้อมูล</button>
+                    <button type="button" id="btnConfirmSubmit" class="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-[15px] rounded-md shadow transition flex items-center justify-center space-x-2 w-full md:w-auto"><span>✓ ยืนยันและส่งคำขอ</span></button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="mt-auto bg-white border-t border-govgray-200 py-6 text-center text-[13px] text-govgray-500">
+        สำนักงานประกันสังคม กระทรวงแรงงาน &copy; 2026 ระบบสารสนเทศเพื่อการเลือกตั้งผู้แทนบอร์ดประกันสังคม
+    </footer>
+
+    <!-- 💡 ลิงก์ไฟล์ JavaScript ภายนอก (แทนที่ <?!= include('Scripts'); ?>) -->
+    <script src="script.js"></script>
+</body>
+</html>
