@@ -776,7 +776,7 @@ async function processFiles(fileList) {
             
             // เก็บข้อมูลจำลองการเป็น PDF 1 ไฟล์เข้าระบบ
             AppState.selectedFiles = [{
-                filename: `NDA_Document_Merged.pdf`,
+                filename: `NDA_รอสร้างรหัสคำขอ.pdf`,
                 mimeType: 'application/pdf',
                 base64: pdfDataUri
             }];
