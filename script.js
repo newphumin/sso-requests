@@ -434,31 +434,38 @@ function togglePasswordVisibility() {
       if(iconEyeOn) iconEyeOn.classList.add('hidden');
   }
 }
+// ==========================================
+// ส่วนปรับปรุงหน้ากู้คืนรหัส (Modal & Auto-fetch)
+// ==========================================
+let isFetchingId = false; // ตัวแปรป้องกันระบบยิง API ซ้ำซ้อนขณะกำลังโหลด
 
-// ==========================================
-// ส่วนปรับปรุงหน้ากู้คืนรหัส (Modal)
-// ==========================================
 function setupForgotIdSystem() {
     const lookupInput = document.getElementById('lookupCitizenId');
-    const lookupPhone = document.getElementById('lookupPhone'); // ช่องเบอร์โทรใน Modal
+    const lookupPhone = document.getElementById('lookupPhone');
 
-    // 💡 ฟังก์ชันใหม่: เช็คว่าพิมพ์ครบหรือยัง ถ้าครบให้ดึงข้อมูลเลย
+    // ฟังก์ชันตรวจสอบความครบถ้วนและสั่งดึงข้อมูล
     const checkAndFetchAuto = () => {
+        // ป้องกัน Error กรณี AppStateStatus ไม่พร้อม
+        if (typeof AppStateStatus === 'undefined') return; 
+        
         const rawId = AppStateStatus.rawCitizenId || '';
         const phone = lookupPhone ? lookupPhone.value.trim() : '';
         
-        // เมื่อบัตรครบ 13 หลัก และเบอร์โทรครบ 10 หลัก ให้เรียก API ทันที
-        if (rawId.length === 13 && phone.length === 10) {
+        // ถ้าบัตรครบ 13 หลัก + เบอร์ครบ 10 หลัก + ระบบไม่ได้กำลังโหลดอยู่ -> ให้ดึงข้อมูลเลย!
+        if (rawId.length === 13 && phone.length === 10 && !isFetchingId) {
             fetchRequestId();
         }
     };
 
     if (lookupInput) {
+        // ตรวจจับเมื่อผู้ใช้พิมพ์ด้วยตัวเอง
         lookupInput.addEventListener('input', function(e) {
             AppStateStatus.rawCitizenId = e.target.value.replace(/\D/g, '').substring(0, 13);
             e.target.value = AppStateStatus.rawCitizenId;
-            checkAndFetchAuto(); // เรียกเช็คทุกครั้งที่พิมพ์บัตร ปชช.
+            checkAndFetchAuto(); 
         });
+        // ตรวจจับเมื่อเบราว์เซอร์ช่วยเติมข้อมูล (Auto-fill)
+        lookupInput.addEventListener('change', checkAndFetchAuto);
 
         lookupInput.addEventListener('blur', function(e) {
             if (AppStateStatus.rawCitizenId && AppStateStatus.rawCitizenId.length === 13) {
@@ -474,46 +481,47 @@ function setupForgotIdSystem() {
     }
     
     if (lookupPhone) {
+        // ตรวจจับเมื่อผู้ใช้พิมพ์เบอร์โทรด้วยตัวเอง
         lookupPhone.addEventListener('input', (e) => {
             e.target.value = e.target.value.replace(/\D/g, '').substring(0, 10);
-            checkAndFetchAuto(); // เรียกเช็คทุกครั้งที่พิมพ์เบอร์โทร
+            checkAndFetchAuto(); 
         });
+        // ตรวจจับเมื่อเบราว์เซอร์ช่วยเติมข้อมูล (Auto-fill)
+        lookupPhone.addEventListener('change', checkAndFetchAuto);
     }
 }
 
+// ฟังก์ชันดึงข้อมูลแบบ Auto-close
 async function fetchRequestId() {
+    if (isFetchingId) return;
+    isFetchingId = true; // ล็อคระบบกันเหนียว
+
     try {
-        const phoneInput = document.getElementById('lookupPhone').value.trim(); // รับจาก Modal
+        const phoneInput = document.getElementById('lookupPhone').value.trim();
         const rawId = AppStateStatus.rawCitizenId;
 
         hideAlert();
 
-        if (!rawId || rawId.length !== 13) {
-            toggleModal('forgotIdModal', false); // ปิด Modal เพื่อโชว์ Alert แดง
-            return showAlert('error', 'กรุณากรอกเลขประจำตัวประชาชน 13 หลักให้ครบถ้วน');
-        }
-        if (!phoneInput) {
-            toggleModal('forgotIdModal', false);
-            return showAlert('error', 'กรุณากรอกเบอร์โทรศัพท์ที่ใช้ลงทะเบียนด้วยครับ');
-        }
-
-        toggleModal('forgotIdModal', false); // ปิด Modal เพื่อโชว์หน้าจอโหลด
+        // ปิด Modal ทันทีเมื่อข้อมูลครบและเริ่มโหลด
+        toggleModal('forgotIdModal', false); 
         showLoading(true, 'กำลังดึงรหัสคำขออัตโนมัติ...');
 
         const res = await API.call('apiFindRequestId', { citizenId: rawId, phone: phoneInput });
         
         showLoading(false);
+        isFetchingId = false; // ปลดล็อคระบบ
+
         if (res && res.success) {
-            // พาผู้ใช้สลับหน้าจอไปที่แท็บ 'สอบถามสถานะ 1' อัตโนมัติ (ถ้าไม่ได้อยู่หน้านั้น)
+            // พาไปหน้าตรวจสอบสถานะ
             switchTab('status'); 
             
-            // นำรหัสที่ได้ใส่ในช่องค้นหา
+            // เติมข้อมูลลงช่องค้นหาให้อัตโนมัติ
             document.getElementById('searchReqId').value = res.requestId;
-            document.getElementById('searchPhone').value = phoneInput; // เติมเบอร์โทรให้ด้วยเพื่อความสะดวก
+            document.getElementById('searchPhone').value = phoneInput; 
             
             showAlert('success', 'ดึงรหัสคำขอสำเร็จ! ระบบเติมข้อมูลในช่องค้นหาให้เรียบร้อยแล้ว');
             
-            // เคลียร์ข้อมูลใน Modal เผื่อกดเข้ามาใหม่
+            // เคลียร์ข้อมูลใน Modal ทิ้งเพื่อความปลอดภัย
             document.getElementById('lookupCitizenId').value = '';
             document.getElementById('lookupPhone').value = '';
             AppStateStatus.rawCitizenId = '';
@@ -522,6 +530,7 @@ async function fetchRequestId() {
             showAlert('error', res.message || 'ไม่พบรหัสคำขอจากเลขประจำตัวและเบอร์โทรนี้');
         }
     } catch (err) {
+        isFetchingId = false; // ปลดล็อคกรณีเกิด Error
         showLoading(false);
         showAlert('error', 'เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message);
     }
