@@ -292,7 +292,7 @@ function handleStatusSuccess(res) {
         if (resultApproved) resultApproved.classList.add('hidden');
         if (resultPending) resultPending.classList.add('hidden');
         
-        if (actualStatus === 'Approved' || actualStatus === 'อนุมัติแล้ว') {
+        if (actualStatus === 'Approved' || actualStatus === 'อนุมัติ'|| actualStatus === 'อนุมัติแล้ว') {
             // ==========================================
             // กรณี: อนุมัติ (เปิดกล่องเขียวเดิมของคุณ)
             // ==========================================
