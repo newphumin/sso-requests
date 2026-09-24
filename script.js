@@ -754,9 +754,16 @@ async function handleValidateAndPreview() {
     return showAlert('error', 'กรุณาแนบเอกสารข้อตกลง NDA (PDF 1 ไฟล์ หรือ รูปภาพหลายไฟล์)');
   }
 
+  // 💡 การแก้ไขสำคัญ: สร้างข้อมูลจำลองของไฟล์ เพื่อไม่ให้ Payload ใหญ่เกินไปจนการตรวจสอบค้าง
+  const dummyFileData = AppState.selectedFiles.map(f => ({
+      filename: f.filename,
+      mimeType: f.mimeType,
+      base64: '' // ลบข้อมูลก้อนไฟล์ทิ้งชั่วคราวตอนตรวจสอบ
+  }));
+
   const payload = {
     citizenId, firstname, lastname, firstnameEn, lastnameEn, email, phone, ssoBranchCode, pollingStationId,
-    fileData: AppState.selectedFiles 
+    fileData: dummyFileData // ส่งข้อมูลหลอกไปให้ฝั่งเซิร์ฟเวอร์เช็คชื่ออย่างเดียว
   };
 
   showLoading(true, 'กำลังตรวจสอบข้อมูลและความซ้ำซ้อน...');
@@ -766,7 +773,10 @@ async function handleValidateAndPreview() {
       showLoading(false);
       
       if (res && res.success) {
-        document.getElementById('prevCitizenId').textContent = res.data.maskedCitizenId;
+        // ดักจับกรณีที่ Backend ส่งข้อมูลกลับมาไม่ครบ ให้ทำ Masking ตัวเลขจากฝั่งหน้าเว็บแทน
+        const maskedId = (res.data && res.data.maskedCitizenId) ? res.data.maskedCitizenId : maskCitizenIdForSearch(citizenId);
+        
+        document.getElementById('prevCitizenId').textContent = maskedId;
         document.getElementById('prevName').textContent = `${maskNameClient(firstname)} ${maskNameClient(lastname)}`;
         
         const prevNameEnEl = document.getElementById('prevNameEn');
@@ -785,11 +795,11 @@ async function handleValidateAndPreview() {
 
         toggleModal('previewModal', true);
       } else {
-        showAlert('error', res.message || 'การตรวจสอบข้อมูลไม่ผ่าน');
+        showAlert('error', res ? res.message : 'การตรวจสอบข้อมูลไม่ผ่าน');
       }
   } catch(err) {
       showLoading(false);
-      showAlert('error', 'ข้อผิดพลาด: ' + err.message);
+      showAlert('error', 'ข้อผิดพลาดในการตรวจสอบ: ' + err.message);
   }
 }
 
