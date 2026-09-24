@@ -30,7 +30,7 @@ let captchaAnswer = ''; // เก็บคำตอบ Captcha ไว้ตร�
 const API = {
   call: async function(action, payload = null) {
       // 👇 นำ Web App URL ของคุณมาใส่ตรงนี้
-      const GAS_URL = 'https://script.google.com/macros/s/AKfycbziLloGu8QIX6-IJpJi01k25R8cAG-bakNAFiHZcwgWpJJuHFLY8-02k25d2dbp_FyGDg/exec'; 
+      const GAS_URL = 'https://sso-requests.new903900.workers.dev/'; 
       
       try {
           const response = await fetch(GAS_URL, {
