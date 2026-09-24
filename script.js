@@ -36,7 +36,7 @@ const API = {
           const response = await fetch(GAS_URL, {
               method: 'POST',
               headers: {
-                  'Content-Type': 'application/json', // ป้องกัน CORS Preflight
+                  'Content-Type': 'application/json',
               },
               body: JSON.stringify({ action: action, payload: payload })
           });
