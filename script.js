@@ -435,22 +435,12 @@ function togglePasswordVisibility() {
   }
 }
 
+// ==========================================
+// ส่วนปรับปรุงหน้ากู้คืนรหัส (Modal)
+// ==========================================
 function setupForgotIdSystem() {
-    const chkForgotId = document.getElementById('chkForgotId');
-    const forgotIdContainer = document.getElementById('forgotIdContainer');
     const lookupInput = document.getElementById('lookupCitizenId');
-
-    if (chkForgotId && forgotIdContainer) {
-        chkForgotId.addEventListener('change', function() {
-            if (this.checked) {
-                forgotIdContainer.classList.remove('hidden');
-            } else {
-                forgotIdContainer.classList.add('hidden');
-                if (lookupInput) lookupInput.value = '';
-                AppStateStatus.rawCitizenId = '';
-            }
-        });
-    }
+    const lookupPhone = document.getElementById('lookupPhone'); // ช่องเบอร์โทรใน Modal
 
     if (lookupInput) {
         lookupInput.addEventListener('input', function(e) {
@@ -470,65 +460,56 @@ function setupForgotIdSystem() {
             }
         });
     }
+    
+    // บังคับให้เบอร์โทรใน Modal พิมพ์ได้แค่ตัวเลข
+    if (lookupPhone) {
+        lookupPhone.addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
+    }
 }
 
-// ฟังก์ชันส่งค่าไปค้นหา Request ID (แก้ไขโครงสร้าง API)
 async function fetchRequestId() {
     try {
-        const phoneInput = document.getElementById('searchPhone').value.trim();
+        const phoneInput = document.getElementById('lookupPhone').value.trim(); // รับจาก Modal
         const rawId = AppStateStatus.rawCitizenId;
 
         hideAlert();
 
         if (!rawId || rawId.length !== 13) {
+            toggleModal('forgotIdModal', false); // ปิด Modal เพื่อโชว์ Alert แดง
             return showAlert('error', 'กรุณากรอกเลขประจำตัวประชาชน 13 หลักให้ครบถ้วน');
         }
         if (!phoneInput) {
-            return showAlert('error', 'กรุณากรอกเบอร์โทรศัพท์ที่ใช้ลงทะเบียนในช่องด้านบนด้วยครับ');
+            toggleModal('forgotIdModal', false);
+            return showAlert('error', 'กรุณากรอกเบอร์โทรศัพท์ที่ใช้ลงทะเบียนด้วยครับ');
         }
 
+        toggleModal('forgotIdModal', false); // ปิด Modal เพื่อโชว์หน้าจอโหลด
         showLoading(true, 'กำลังดึงรหัสคำขออัตโนมัติ...');
 
-        if (typeof google !== 'undefined' && google.script) {
-             google.script.run
-                .withSuccessHandler(res => {
-                    showLoading(false); 
-                    if (res.success) {
-                        document.getElementById('searchReqId').value = res.requestId;
-                        document.getElementById('forgotIdContainer').classList.add('hidden');
-                        const chk = document.getElementById('chkForgotId');
-                        if (chk) chk.checked = false;
-                        showAlert('success', 'ดึงรหัสคำขอสำเร็จ! ระบบเติมรหัสให้เรียบร้อยแล้ว');
-                    } else {
-                        showAlert('error', res.message || 'ไม่พบรหัสคำขอ กรุณาตรวจสอบเลขบัตรและเบอร์โทรอีกครั้ง');
-                    }
-                })
-                .withFailureHandler(err => {
-                    showLoading(false); 
-                    showAlert('error', 'เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message);
-                })
-                .apiFindRequestId({ citizenId: rawId, phone: phoneInput });
-        } else {
-             try {
-                const res = await API.call('apiFindRequestId', { citizenId: rawId, phone: phoneInput });
-                showLoading(false);
-                if (res.success) {
-                    document.getElementById('searchReqId').value = res.requestId;
-                    document.getElementById('forgotIdContainer').classList.add('hidden');
-                    const chk = document.getElementById('chkForgotId');
-                    if (chk) chk.checked = false;
-                    showAlert('success', 'ดึงรหัสคำขอสำเร็จ! ระบบเติมรหัสให้เรียบร้อยแล้ว');
-                } else {
-                    showAlert('error', res.message || 'ไม่พบรหัสคำขอ');
-                }
-             } catch (err) {
-                showLoading(false);
-                showAlert('error', 'เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message);
-             }
-        }
-    } catch (error) {
+        const res = await API.call('apiFindRequestId', { citizenId: rawId, phone: phoneInput });
+        
         showLoading(false);
-        showAlert('error', 'ข้อผิดพลาดหน้าเว็บ: ' + error.message);
+        if (res && res.success) {
+            // พาผู้ใช้สลับหน้าจอไปที่แท็บ 'สอบถามสถานะ 1' อัตโนมัติ (ถ้าไม่ได้อยู่หน้านั้น)
+            switchTab('status'); 
+            
+            // นำรหัสที่ได้ใส่ในช่องค้นหา
+            document.getElementById('searchReqId').value = res.requestId;
+            document.getElementById('searchPhone').value = phoneInput; // เติมเบอร์โทรให้ด้วยเพื่อความสะดวก
+            
+            showAlert('success', 'ดึงรหัสคำขอสำเร็จ! ระบบเติมข้อมูลในช่องค้นหาให้เรียบร้อยแล้ว');
+            
+            // เคลียร์ข้อมูลใน Modal เผื่อกดเข้ามาใหม่
+            document.getElementById('lookupCitizenId').value = '';
+            document.getElementById('lookupPhone').value = '';
+            AppStateStatus.rawCitizenId = '';
+            
+        } else {
+            showAlert('error', res.message || 'ไม่พบรหัสคำขอจากเลขประจำตัวและเบอร์โทรนี้');
+        }
+    } catch (err) {
+        showLoading(false);
+        showAlert('error', 'เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message);
     }
 }
 
