@@ -281,26 +281,25 @@ function handleStatusSuccess(res) {
         if (searchResultArea) searchResultArea.classList.remove('hidden');
         
         const d = res.data.data;
-        // เนื่องจาก Cloudflare Worker ส่งมาแค่ isApproved เราจะเช็คสถานะจริงจาก d.status
-        const actualStatus = d.status; 
+        // จัดการสถานะให้ปลอดภัย (ลบช่องว่างหน้าหลัง ป้องกัน error)
+        const actualStatus = d.status ? String(d.status).trim() : ''; 
         
         const resultPending = document.getElementById('resultPending');
         const resultApproved = document.getElementById('resultApproved');
         const resStatusEl = document.getElementById('resStatus');
 
-        // รีเซ็ตการแสดงผลก่อน
+        // ปิดกล่องทั้งหมดก่อน
         if (resultApproved) resultApproved.classList.add('hidden');
         if (resultPending) resultPending.classList.add('hidden');
         
         if (actualStatus === 'Approved' || actualStatus === 'อนุมัติแล้ว') {
             // ==========================================
-            // กรณี: อนุมัติ (โชว์ข้อมูลครบถ้วน)
+            // กรณี: อนุมัติ (เปิดกล่องเขียวเดิมของคุณ)
             // ==========================================
             if (resultApproved) resultApproved.classList.remove('hidden');
             
             if (resStatusEl) {
                 resStatusEl.textContent = actualStatus;
-                // ปรับแต่งสีข้อความและพื้นหลังให้เป็นสีเขียว
                 resStatusEl.style.color = '#198754';
                 resStatusEl.style.backgroundColor = '#d1e7dd';
             }
@@ -314,7 +313,6 @@ function handleStatusSuccess(res) {
                 const rawPassword = d.password || '';
                 resPasswordEl.setAttribute('data-password', rawPassword);
                 resPasswordEl.textContent = '••••••••';
-                
                 AppStateStatus.isPasswordVisible = false;
                 
                 if (rawPassword) {
@@ -351,47 +349,30 @@ function handleStatusSuccess(res) {
 
         } else if (actualStatus === 'ไม่อนุมัติ' || actualStatus === 'Rejected') {
             // ==========================================
-            // กรณี: ไม่อนุมัติ (โชว์กล่องแดง ประยุกต์ใช้ element ของ resultPending)
+            // กรณี: ไม่อนุมัติ (ใช้วิธีแทนที่ HTML ลงไปตรงๆ เพื่อความชัวร์)
             // ==========================================
             if (resultPending) {
                 resultPending.classList.remove('hidden');
+                resultPending.className = "mt-6 p-0 border border-red-300 rounded-lg overflow-hidden"; // ล้าง class เดิม
                 
-                // ค้นหา Element ภายในเพื่อปรับแต่งข้อความและสี
-                const titleEl = resultPending.querySelector('h5');
-                const descEl = resultPending.querySelector('.text-center.text-gray-500'); // สมมติว่ามี class นี้
-                const iconBox = resultPending.querySelector('div.bg-yellow-100'); // สมมติว่านี่คือกล่องใส่ไอคอนตกใจ
-
-                // ปรับเปลี่ยนหน้าตาให้เป็นสีแดง (ไม่อนุมัติ)
-                resultPending.style.borderColor = '#f5c2c7';
+                const remarkText = d.remark || 'ไม่ได้ระบุสาเหตุ (กรุณาติดต่อเจ้าหน้าที่)';
                 
-                if (iconBox) {
-                    iconBox.style.backgroundColor = '#dc3545';
-                    iconBox.style.color = 'white';
-                    iconBox.innerHTML = '✕';
-                }
-                
-                if (titleEl) {
-                    titleEl.textContent = 'คำขอไม่ผ่านการอนุมัติ';
-                    titleEl.style.color = '#842029';
-                    titleEl.parentElement.style.backgroundColor = '#f8d7da';
-                    titleEl.parentElement.style.borderColor = '#f5c2c7';
-                }
-
-                if (descEl) {
-                    const remarkText = d.remark || 'ไม่ได้ระบุสาเหตุ (กรุณาติดต่อเจ้าหน้าที่)';
-                    descEl.style.color = '#212529';
-                    descEl.style.textAlign = 'left';
-                    descEl.innerHTML = `
-                        <div style="display: flex; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #dee2e6;">
-                            <strong style="width: 120px; color: #dc3545;">สถานะ:</strong> 
-                            <span>ไม่อนุมัติ (Rejected)</span>
+                resultPending.innerHTML = `
+                    <div style="background-color: #f8d7da; padding: 15px 20px; display: flex; align-items: center; border-bottom: 1px solid #f5c2c7;">
+                        <div style="background-color: #dc3545; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; justify-content: center; align-items: center; margin-right: 12px; font-weight: bold; font-size: 14px;">✕</div>
+                        <strong style="margin: 0; color: #842029; font-size: 16px;">คำขอไม่ผ่านการอนุมัติ</strong>
+                    </div>
+                    <div style="padding: 20px; background-color: #ffffff;">
+                        <div style="display: flex; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f1f3f5;">
+                            <strong style="width: 130px; color: #dc3545; font-size: 15px;">สถานะ:</strong> 
+                            <span style="color: #212529; font-size: 15px;">ไม่อนุมัติ (Rejected)</span>
                         </div>
                         <div style="display: flex;">
-                            <strong style="width: 120px; color: #6c757d;">สาเหตุ:</strong> 
-                            <span>${remarkText}</span>
+                            <strong style="width: 130px; color: #6c757d; font-size: 15px;">สาเหตุที่ไม่อนุมัติ:</strong> 
+                            <span style="color: #212529; font-size: 15px;">${remarkText}</span>
                         </div>
-                    `;
-                }
+                    </div>
+                `;
             }
 
         } else {
@@ -400,35 +381,18 @@ function handleStatusSuccess(res) {
             // ==========================================
             if (resultPending) {
                 resultPending.classList.remove('hidden');
+                resultPending.className = "mt-6 p-0 border border-yellow-300 rounded-lg overflow-hidden"; 
                 
-                // คืนค่ารูปแบบกลับไปเป็นสีเหลือง (Pending)
-                resultPending.style.borderColor = '#ffeeba';
-                
-                const titleEl = resultPending.querySelector('h5');
-                const descEl = resultPending.querySelector('.text-center');
-                const iconBox = resultPending.querySelector('div[style*="background-color: #dc3545"]'); // ค้นหากล่องที่อาจถูกเปลี่ยนเป็นสีแดงไปแล้ว
-                const headerBox = titleEl ? titleEl.parentElement : null;
-
-                if (iconBox) {
-                    iconBox.style.backgroundColor = '#ffc107';
-                    iconBox.style.color = '#000';
-                    iconBox.innerHTML = '!'; // ไอคอนตกใจ
-                }
-                
-                if (titleEl) {
-                    titleEl.textContent = 'อยู่ระหว่างการพิจารณา';
-                    titleEl.style.color = '#856404';
-                    if (headerBox) {
-                        headerBox.style.backgroundColor = '#fff3cd';
-                        headerBox.style.borderColor = '#ffeeba';
-                    }
-                }
-
-                if (descEl) {
-                    descEl.style.color = '#6c757d';
-                    descEl.style.textAlign = 'center';
-                    descEl.textContent = 'คำขอของคุณกำลังอยู่ในขั้นตอนการตรวจสอบ กรุณากลับมาตรวจสอบสถานะอีกครั้งในภายหลัง';
-                }
+                resultPending.innerHTML = `
+                    <div style="background-color: #fff3cd; padding: 15px 20px; display: flex; align-items: center; border-bottom: 1px solid #ffeeba;">
+                        <div style="background-color: #ffc107; color: #000; border-radius: 50%; width: 24px; height: 24px; display: flex; justify-content: center; align-items: center; margin-right: 12px; font-weight: bold; font-size: 14px;">!</div>
+                        <strong style="margin: 0; color: #856404; font-size: 16px;">สถานะ: อยู่ระหว่างการพิจารณา</strong>
+                    </div>
+                    <div style="padding: 20px; background-color: #ffffff; text-align: center;">
+                        <p style="color: #6c757d; font-size: 15px; margin-bottom: 10px;">สำนักงานประกันสังคมได้รับคำขอของท่านแล้ว ขณะนี้อยู่ระหว่างขั้นตอนการตรวจสอบเอกสาร</p>
+                        <p style="color: #6c757d; font-size: 15px; font-weight: 500;">หากมีข้อสงสัย โทร. 02-956-2357, 56, 62</p>
+                    </div>
+                `;
             }
         }
 
