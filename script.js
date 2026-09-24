@@ -1,7 +1,7 @@
 /**
  * Frontend Application Controller (script.js)
  * รวมระบบยื่นคำขอ และ ระบบตรวจสอบสถานะ
- * อัปเกรดเพื่อรองรับการทำงานแยกส่วน (Frontend/Backend) บน Cloudflare/Vercel
+ * อัปเกรดเพื่อรองรับการทำงานแยกส่วน (Frontend/Backend) บน Cloudflare
  */
 
 // ==========================================
@@ -16,24 +16,24 @@ const AppState = {
   rawCitizenId: '' 
 };
 
-// เพิ่ม State แยกต่างหากสำหรับหน้าสถานะเพื่อป้องกัน undefined error
 const AppStateStatus = {
   rawCitizenId: '',
   isPasswordVisible: false
 };
 
-let captchaAnswer = ''; // เก็บคำตอบ Captcha ไว้ตรวจสอบ
+let captchaAnswer = ''; 
+let isFetchingId = false; // ตัวแปรป้องกันระบบยิง API ซ้ำซ้อนขณะกำลังดึง Request ID
 
-// 💡 ---------------------------------------------------------
-// 💡 ส่วนตั้งค่า API URL (เชื่อมต่อกับ Google Apps Script Backend)
-// 💡 ---------------------------------------------------------
+// ==========================================
+// 💡 ส่วนตั้งค่า API URL (Cloudflare Worker Backend)
+// ==========================================
 const API = {
   call: async function(action, payload = null) {
       // 👇 นำ Web App URL ของคุณมาใส่ตรงนี้
-      const GAS_URL = 'https://sso-requests.new903900.workers.dev/'; 
+      const WORKER_URL = 'https://sso-requests.new903900.workers.dev/'; 
       
       try {
-          const response = await fetch(GAS_URL, {
+          const response = await fetch(WORKER_URL, {
               method: 'POST',
               headers: {
                   'Content-Type': 'application/json',
@@ -56,16 +56,12 @@ const API = {
 };
 
 // ==========================================
-// 2. การกำหนดค่าเริ่มต้นเมื่อโหลดหน้าเว็บเสร็จ
+// 2. การกำหนดค่าเริ่มต้น
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
-  
-  // ⚠️ ปิด loadInitialReferenceData ไว้ก่อนชั่วคราว หากนำไปรันบน GitHub Pages ทันทีโดยยังไม่แก้ API
-  // หาก Backend พร้อมแล้วค่อยเปิดบรรทัดล่างนี้ครับ
-   loadInitialReferenceData(); 
-  
-  generateCaptcha(); // สร้าง Captcha ครั้งแรกเมื่อโหลด
+  loadInitialReferenceData(); // โหลดรายชื่อ สปส. จากหลังบ้าน
+  generateCaptcha(); 
 });
 
 function initEventListeners() {
@@ -82,7 +78,6 @@ function initEventListeners() {
   const phoneInput = document.getElementById('phone');
   
   const userRequestForm = document.getElementById('userRequestForm');
-
   if(userRequestForm) userRequestForm.addEventListener('submit', (e) => e.preventDefault());
   
   const fNameEnInput = document.getElementById('firstnameEn');
@@ -97,7 +92,6 @@ function initEventListeners() {
   const searchPhoneInput = document.getElementById('searchPhone');
   if(searchPhoneInput) searchPhoneInput.addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
 
-  // ตรวจจับการพิมพ์ Captcha ให้รับอักษรพิมพ์เล็กและตัวเลข
   const searchCaptchaInput = document.getElementById('searchCaptcha');
   if(searchCaptchaInput) searchCaptchaInput.addEventListener('input', (e) => e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
@@ -130,16 +124,9 @@ function initEventListeners() {
   const btnToggle = document.getElementById('btnTogglePassword');
   if(btnToggle) btnToggle.addEventListener('click', togglePasswordVisibility);
   
-  // ผูกปุ่มดึงรหัสคำขอด้วย Event Listener
-  const btnFetchReqId = document.getElementById('btnFetchReqId');
-  if (btnFetchReqId) {
-      btnFetchReqId.addEventListener('click', fetchRequestId);
-  }
-  
-  // ตั้งค่าระบบกู้คืน Request ID
+  // ตั้งค่าระบบกู้คืน Request ID แบบ Auto-fetch
   setupForgotIdSystem();
   
-  // ปุ่มล้างข้อมูล
   const btnClearStatusForm = document.getElementById('btnClearStatusForm');
   if (btnClearStatusForm) {
       btnClearStatusForm.addEventListener('click', clearStatusForm);
@@ -151,25 +138,24 @@ function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
 // ==========================================
 // 3. ระบบ TABS และ CAPTCHA
 // ==========================================
-
 function switchTab(tabName) {
   hideAlert();
-  document.getElementById('searchResultArea').classList.add('hidden');
+  const searchResultArea = document.getElementById('searchResultArea');
+  if (searchResultArea) searchResultArea.classList.add('hidden');
   
+  // เคลียร์ค่าในหน้าสถานะ
   const searchReqId = document.getElementById('searchReqId');
   const searchPhone = document.getElementById('searchPhone');
   const searchCaptcha = document.getElementById('searchCaptcha');
-  const chkForgotId = document.getElementById('chkForgotId');
-  const forgotIdContainer = document.getElementById('forgotIdContainer');
-  const lookupInput = document.getElementById('lookupCitizenId');
-
   if (searchReqId) searchReqId.value = '';
   if (searchPhone) searchPhone.value = '';
   if (searchCaptcha) searchCaptcha.value = '';
   
-  if (chkForgotId) chkForgotId.checked = false;
-  if (forgotIdContainer) forgotIdContainer.classList.add('hidden');
+  // เคลียร์ค่าใน Modal เผื่อไว้
+  const lookupInput = document.getElementById('lookupCitizenId');
+  const lookupPhone = document.getElementById('lookupPhone');
   if (lookupInput) lookupInput.value = '';
+  if (lookupPhone) lookupPhone.value = '';
   AppStateStatus.rawCitizenId = ''; 
   
   const tabFormBtn = document.getElementById('tabForm');
@@ -195,7 +181,6 @@ function switchTab(tabName) {
   }
 }
 
-// สร้าง Captcha อักษร 5 ตัว และเลข 1 ตัว แบบสุ่มตำแหน่ง
 function generateCaptcha() {
   const letters = 'abcdefghijklmnopqrstuvwxyz';
   const numbers = '0123456789';
@@ -221,7 +206,97 @@ function generateCaptcha() {
 }
 
 // ==========================================
-// 4. ฟังก์ชันค้นหาสถานะคำขอ 
+// 4. ระบบกู้คืนรหัสคำขอ (Modal & Auto-fetch)
+// ==========================================
+function setupForgotIdSystem() {
+    const lookupInput = document.getElementById('lookupCitizenId');
+    const lookupPhone = document.getElementById('lookupPhone');
+
+    const checkAndFetchAuto = () => {
+        if (typeof AppStateStatus === 'undefined') return; 
+        
+        const rawId = AppStateStatus.rawCitizenId || '';
+        const phone = lookupPhone ? lookupPhone.value.trim() : '';
+        
+        // ถ้าบัตร 13 หลัก และเบอร์ 10 หลักครบ ให้ดึงข้อมูลอัตโนมัติ
+        if (rawId.length === 13 && phone.length === 10 && !isFetchingId) {
+            fetchRequestIdAuto();
+        }
+    };
+
+    if (lookupInput) {
+        lookupInput.addEventListener('input', function(e) {
+            AppStateStatus.rawCitizenId = e.target.value.replace(/\D/g, '').substring(0, 13);
+            e.target.value = AppStateStatus.rawCitizenId;
+            checkAndFetchAuto(); 
+        });
+        lookupInput.addEventListener('change', checkAndFetchAuto);
+
+        lookupInput.addEventListener('blur', function(e) {
+            if (AppStateStatus.rawCitizenId && AppStateStatus.rawCitizenId.length === 13) {
+                e.target.value = `${AppStateStatus.rawCitizenId[0]}-xxxx-xxxxx-xx-${AppStateStatus.rawCitizenId[12]}`;
+            }
+        });
+
+        lookupInput.addEventListener('focus', function(e) {
+            if (AppStateStatus.rawCitizenId) {
+                e.target.value = AppStateStatus.rawCitizenId;
+            }
+        });
+    }
+    
+    if (lookupPhone) {
+        lookupPhone.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\D/g, '').substring(0, 10);
+            checkAndFetchAuto(); 
+        });
+        lookupPhone.addEventListener('change', checkAndFetchAuto);
+    }
+}
+
+async function fetchRequestIdAuto() {
+    if (isFetchingId) return;
+    isFetchingId = true; 
+
+    try {
+        const phoneInput = document.getElementById('lookupPhone').value.trim();
+        const rawId = AppStateStatus.rawCitizenId;
+
+        hideAlert();
+        toggleModal('forgotIdModal', false); 
+        showLoading(true, 'กำลังดึงรหัสคำขออัตโนมัติ...');
+
+        const res = await API.call('apiFindRequestId', { citizenId: rawId, phone: phoneInput });
+        
+        showLoading(false);
+        isFetchingId = false; 
+
+        if (res && res.success) {
+            switchTab('status'); 
+            document.getElementById('searchReqId').value = res.requestId;
+            document.getElementById('searchPhone').value = phoneInput; 
+            
+            showAlert('success', 'ดึงรหัสคำขอสำเร็จ! ระบบเติมข้อมูลในช่องค้นหาให้เรียบร้อยแล้ว กรุณายืนยันตัวตนเพื่อค้นหาข้อมูล');
+            
+            document.getElementById('lookupCitizenId').value = '';
+            document.getElementById('lookupPhone').value = '';
+            AppStateStatus.rawCitizenId = '';
+            
+        } else {
+            showAlert('error', res.message || 'ไม่พบรหัสคำขอจากเลขประจำตัวและเบอร์โทรนี้');
+            // ถ้าไม่เจอ ให้เปิด Modal คืนมาให้ผู้ใช้พิมพ์ใหม่
+            setTimeout(() => toggleModal('forgotIdModal', true), 500); 
+        }
+    } catch (err) {
+        isFetchingId = false; 
+        showLoading(false);
+        showAlert('error', 'เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message);
+    }
+}
+
+
+// ==========================================
+// 5. ฟังก์ชันค้นหาสถานะคำขอ 
 // ==========================================
 async function searchStatus() {
   try {
@@ -249,29 +324,15 @@ async function searchStatus() {
 
       showLoading(true, 'กำลังค้นหาข้อมูล...');
 
-      // 💡 แปลง google.script.run เป็น API.call แบบ Async/Await
-      if (typeof google !== 'undefined' && google.script) {
-          // หากยังรันใน Google Apps Script ชั่วคราว (Fallback Mode)
-          google.script.run
-              .withSuccessHandler(handleStatusSuccess)
-              .withFailureHandler(handleStatusError)
-              .apiCheckStatus({ requestId: reqId, phone: phone });
-      } else {
-          // หากรันแบบ Standalone โฮสติ้งใหม่
-          try {
-              const res = await API.call('apiCheckStatus', { requestId: reqId, phone: phone });
-              handleStatusSuccess(res);
-          } catch (err) {
-              handleStatusError(err);
-          }
-      }
+      const res = await API.call('apiCheckStatus', { requestId: reqId, phone: phone });
+      handleStatusSuccess(res);
+      
   } catch (error) {
       showLoading(false);
-      showAlert('error', 'ข้อผิดพลาดหน้าเว็บ: ' + error.message);
+      showAlert('error', 'ข้อผิดพลาดเครือข่าย: ' + error.message);
   }
 }
 
-// แยกฟังก์ชันจัดการผลลัพธ์ออกมาเพื่อให้โค้ดอ่านง่าย และใช้ซ้ำได้
 function handleStatusSuccess(res) {
     showLoading(false);
     generateCaptcha(); 
@@ -281,21 +342,16 @@ function handleStatusSuccess(res) {
         if (searchResultArea) searchResultArea.classList.remove('hidden');
         
         const d = res.data.data;
-        // จัดการสถานะให้ปลอดภัย (ลบช่องว่างหน้าหลัง ป้องกัน error)
         const actualStatus = d.status ? String(d.status).trim() : ''; 
         
         const resultPending = document.getElementById('resultPending');
         const resultApproved = document.getElementById('resultApproved');
         const resStatusEl = document.getElementById('resStatus');
 
-        // ปิดกล่องทั้งหมดก่อน
         if (resultApproved) resultApproved.classList.add('hidden');
         if (resultPending) resultPending.classList.add('hidden');
         
         if (actualStatus === 'Approved' || actualStatus === 'อนุมัติแล้ว' || actualStatus === 'อนุมัติ' || res.data.isApproved) {
-            // ==========================================
-            // กรณี: อนุมัติ (เปิดกล่องเขียวเดิมของคุณ)
-            // ==========================================
             if (resultApproved) resultApproved.classList.remove('hidden');
             
             if (resStatusEl) {
@@ -348,12 +404,9 @@ function handleStatusSuccess(res) {
             if (document.getElementById('resStation')) document.getElementById('resStation').textContent = d.pollingStationDisplay;
 
         } else if (actualStatus === 'ไม่อนุมัติ' || actualStatus === 'Rejected') {
-            // ==========================================
-            // กรณี: ไม่อนุมัติ (ใช้วิธีแทนที่ HTML ลงไปตรงๆ เพื่อความชัวร์)
-            // ==========================================
             if (resultPending) {
                 resultPending.classList.remove('hidden');
-                resultPending.className = "mt-6 p-0 border border-red-300 rounded-lg overflow-hidden"; // ล้าง class เดิม
+                resultPending.className = "mt-6 p-0 border border-red-300 rounded-lg overflow-hidden"; 
                 
                 const remarkText = d.remark || 'ไม่ได้ระบุสาเหตุ (กรุณาติดต่อเจ้าหน้าที่)';
                 
@@ -376,9 +429,6 @@ function handleStatusSuccess(res) {
             }
 
         } else {
-            // ==========================================
-            // กรณี: รอพิจารณา (Pending)
-            // ==========================================
             if (resultPending) {
                 resultPending.classList.remove('hidden');
                 resultPending.className = "mt-6 p-0 border border-yellow-300 rounded-lg overflow-hidden"; 
@@ -409,9 +459,8 @@ function handleStatusError(err) {
 
 
 // ==========================================
-// 3.1 ระบบดูรหัสผ่าน และ กู้คืน Request ID
+// 6. ระบบดูรหัสผ่าน
 // ==========================================
-
 function togglePasswordVisibility() {
   const resPasswordEl = document.getElementById('resPassword');
   if (!resPasswordEl) return;
@@ -434,128 +483,23 @@ function togglePasswordVisibility() {
       if(iconEyeOn) iconEyeOn.classList.add('hidden');
   }
 }
-// ==========================================
-// ส่วนปรับปรุงหน้ากู้คืนรหัส (Modal & Auto-fetch)
-// ==========================================
-let isFetchingId = false; // ตัวแปรป้องกันระบบยิง API ซ้ำซ้อนขณะกำลังโหลด
-
-function setupForgotIdSystem() {
-    const lookupInput = document.getElementById('lookupCitizenId');
-    const lookupPhone = document.getElementById('lookupPhone');
-
-    // ฟังก์ชันตรวจสอบความครบถ้วนและสั่งดึงข้อมูล
-    const checkAndFetchAuto = () => {
-        // ป้องกัน Error กรณี AppStateStatus ไม่พร้อม
-        if (typeof AppStateStatus === 'undefined') return; 
-        
-        const rawId = AppStateStatus.rawCitizenId || '';
-        const phone = lookupPhone ? lookupPhone.value.trim() : '';
-        
-        // ถ้าบัตรครบ 13 หลัก + เบอร์ครบ 10 หลัก + ระบบไม่ได้กำลังโหลดอยู่ -> ให้ดึงข้อมูลเลย!
-        if (rawId.length === 13 && phone.length === 10 && !isFetchingId) {
-            fetchRequestId();
-        }
-    };
-
-    if (lookupInput) {
-        // ตรวจจับเมื่อผู้ใช้พิมพ์ด้วยตัวเอง
-        lookupInput.addEventListener('input', function(e) {
-            AppStateStatus.rawCitizenId = e.target.value.replace(/\D/g, '').substring(0, 13);
-            e.target.value = AppStateStatus.rawCitizenId;
-            checkAndFetchAuto(); 
-        });
-        // ตรวจจับเมื่อเบราว์เซอร์ช่วยเติมข้อมูล (Auto-fill)
-        lookupInput.addEventListener('change', checkAndFetchAuto);
-
-        lookupInput.addEventListener('blur', function(e) {
-            if (AppStateStatus.rawCitizenId && AppStateStatus.rawCitizenId.length === 13) {
-                e.target.value = `${AppStateStatus.rawCitizenId[0]}-xxxx-xxxxx-xx-${AppStateStatus.rawCitizenId[12]}`;
-            }
-        });
-
-        lookupInput.addEventListener('focus', function(e) {
-            if (AppStateStatus.rawCitizenId) {
-                e.target.value = AppStateStatus.rawCitizenId;
-            }
-        });
-    }
-    
-    if (lookupPhone) {
-        // ตรวจจับเมื่อผู้ใช้พิมพ์เบอร์โทรด้วยตัวเอง
-        lookupPhone.addEventListener('input', (e) => {
-            e.target.value = e.target.value.replace(/\D/g, '').substring(0, 10);
-            checkAndFetchAuto(); 
-        });
-        // ตรวจจับเมื่อเบราว์เซอร์ช่วยเติมข้อมูล (Auto-fill)
-        lookupPhone.addEventListener('change', checkAndFetchAuto);
-    }
-}
-
-// ฟังก์ชันดึงข้อมูลแบบ Auto-close
-async function fetchRequestId() {
-    if (isFetchingId) return;
-    isFetchingId = true; // ล็อคระบบกันเหนียว
-
-    try {
-        const phoneInput = document.getElementById('lookupPhone').value.trim();
-        const rawId = AppStateStatus.rawCitizenId;
-
-        hideAlert();
-
-        // ปิด Modal ทันทีเมื่อข้อมูลครบและเริ่มโหลด
-        toggleModal('forgotIdModal', false); 
-        showLoading(true, 'กำลังดึงรหัสคำขออัตโนมัติ...');
-
-        const res = await API.call('apiFindRequestId', { citizenId: rawId, phone: phoneInput });
-        
-        showLoading(false);
-        isFetchingId = false; // ปลดล็อคระบบ
-
-        if (res && res.success) {
-            // พาไปหน้าตรวจสอบสถานะ
-            switchTab('status'); 
-            
-            // เติมข้อมูลลงช่องค้นหาให้อัตโนมัติ
-            document.getElementById('searchReqId').value = res.requestId;
-            document.getElementById('searchPhone').value = phoneInput; 
-            
-            showAlert('success', 'ดึงรหัสคำขอสำเร็จ! ระบบเติมข้อมูลในช่องค้นหาให้เรียบร้อยแล้ว');
-            
-            // เคลียร์ข้อมูลใน Modal ทิ้งเพื่อความปลอดภัย
-            document.getElementById('lookupCitizenId').value = '';
-            document.getElementById('lookupPhone').value = '';
-            AppStateStatus.rawCitizenId = '';
-            
-        } else {
-            showAlert('error', res.message || 'ไม่พบรหัสคำขอจากเลขประจำตัวและเบอร์โทรนี้');
-        }
-    } catch (err) {
-        isFetchingId = false; // ปลดล็อคกรณีเกิด Error
-        showLoading(false);
-        showAlert('error', 'เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message);
-    }
-}
-
 
 // ==========================================
-// 4.ปรับปรุงฟังก์ชันโหลดข้อมูลเริ่มต้น (รองรับ API ใหม่)
+// 7. โหลดข้อมูลเริ่มต้น (อ้างอิง)
 // ==========================================
-
 async function loadInitialReferenceData() {
   showLoading(true, 'กำลังเชื่อมต่อระบบส่วนกลาง...');
   
   try {
-      // 1. ตรวจสอบสถานะระบบก่อน
       const statusRes = await API.call('apiGetSystemStatus');
       
       if (statusRes && statusRes.success && statusRes.status === 'closed') {
           showLoading(false);
           document.getElementById('formSection').classList.add('hidden');
           document.getElementById('closedSystemMessage').classList.remove('hidden');
-          return; // หยุดการทำงานถ้าปิดระบบ
+          return; 
       } 
       
-      // 2. ถ้าระบบเปิด ให้โหลดข้อมูล สปส.
       showLoading(true, 'กำลังโหลดข้อมูลหน่วยงาน สปส....');
       const res = await API.call('apiGetInitialData');
       showLoading(false);
@@ -565,7 +509,6 @@ async function loadInitialReferenceData() {
           populateBranchDropdown(res.data.branches);
       } else {
           showAlert('error', 'ไม่สามารถโหลดข้อมูลหน่วยงาน สปส. ได้');
-          console.error("Data error:", res);
       }
   } catch (err) {
       showLoading(false);
@@ -603,11 +546,8 @@ async function handleBranchChange(branchCode) {
   stationSelect.disabled = true;
   stationSelect.innerHTML = '<option value="">-- กำลังโหลดข้อมูล... --</option>';
 
-  // โค้ดเดิมจะเช็คว่าอยู่บน GAS หรือไม่ คราวนี้เราบังคับให้ยิงผ่าน API อย่างเดียวเลย
   try {
-      // ยิง API ไปที่ฟังก์ชัน apiGetStationsByBranch พร้อมส่ง branchCode ไปด้วย
       const res = await API.call('apiGetStationsByBranch', branchCode); 
-      
       showLoading(false);
       
       if (res && res.success) {
@@ -680,7 +620,7 @@ function handleStationChange(stationId) {
 }
 
 // ==========================================
-// 5. File Handling (ระบบประมวลผลไฟล์)
+// 8. File Handling (รวม PDF)
 // ==========================================
 function handleDrop(e) {
   const dt = e.dataTransfer;
@@ -701,7 +641,6 @@ async function processFiles(fileList) {
     let hasImg = false;
     let validFiles = [];
 
-    // 1. ตรวจสอบประเภทและขนาดไฟล์เบื้องต้น
     for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const ext = f.name.split('.').pop().toLowerCase();
@@ -740,15 +679,12 @@ async function processFiles(fileList) {
     try {
         AppState.selectedFiles = [];
 
-        // 2. ถ้าเป็นรูปภาพ และมีไลบรารี jspdf โหลดอยู่ ให้รวมเป็น PDF
         if (hasImg && window.jspdf) {
             showLoading(true, 'กำลังรวบรวมรูปภาพเป็นไฟล์ PDF...');
             
-            // ใช้ jspdf (สังเกตว่าต้องดึงมาจาก window.jspdf.jsPDF)
             const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a4'); // กระดาษ A4 แนวตั้ง
+            const pdf = new jsPDF('p', 'mm', 'a4'); 
             
-            // วนลูปอ่านรูปภาพทีละรูป
             for (let i = 0; i < validFiles.length; i++) {
                 const imgDataUrl = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -757,28 +693,22 @@ async function processFiles(fileList) {
                     reader.readAsDataURL(validFiles[i]);
                 });
                 
-                // ดึงขนาดจริงของรูปภาพ เพื่อจัดหน้าให้สวยงาม
                 const imgDims = await getImageDimensions(imgDataUrl);
                 const pdfWidth = pdf.internal.pageSize.getWidth();
                 const pdfHeight = pdf.internal.pageSize.getHeight();
                 
-                // คำนวณอัตราส่วนให้รูปภาพพอดีกับกระดาษ A4
                 const ratio = Math.min(pdfWidth / imgDims.width, pdfHeight / imgDims.height);
                 const imgX = (pdfWidth - imgDims.width * ratio) / 2;
                 const imgY = (pdfHeight - imgDims.height * ratio) / 2;
                 
-                if (i > 0) pdf.addPage(); // ถ้ารูปที่ 2 ขึ้นไป ให้ขึ้นหน้าใหม่
+                if (i > 0) pdf.addPage(); 
                 
-                // นำรูปลงในหน้า PDF
-                // เช็คว่าไฟล์ที่ดึงมาเป็น PNG หรือไม่ ถ้าไม่ใช่ให้ใช้ JPEG เป็นค่าเริ่มต้น
               const imgFormat = validFiles[i].type === 'image/png' ? 'PNG' : 'JPEG';
               pdf.addImage(imgDataUrl, imgFormat, imgX, imgY, imgDims.width * ratio, imgDims.height * ratio);
             }
             
-            // แปลงไฟล์ PDF ที่สร้างเสร็จแล้วให้อยู่ในรูปแบบ Base64
             const pdfDataUri = pdf.output('datauristring');
             
-            // เก็บข้อมูลจำลองการเป็น PDF 1 ไฟล์เข้าระบบ
             AppState.selectedFiles = [{
                 filename: `NDA_รอสร้างรหัสคำขอ.pdf`,
                 mimeType: 'application/pdf',
@@ -786,7 +716,6 @@ async function processFiles(fileList) {
             }];
             
         } else {
-            // 3. ถ้าเป็น PDF อยู่แล้ว หรือไม่มี jspdf ให้โหลดแบบปกติ
             const base64Files = await Promise.all(validFiles.map(file => {
                 return new Promise((resolve, reject) => {
                     const reader = new FileReader();
@@ -798,7 +727,6 @@ async function processFiles(fileList) {
             AppState.selectedFiles = base64Files; 
         }
         
-        // 4. แสดงผลลัพธ์บนหน้าจอ
         const label = document.getElementById('fileNameLabel');
         if (AppState.selectedFiles.length === 1) {
             label.textContent = AppState.selectedFiles[0].filename;
@@ -812,22 +740,15 @@ async function processFiles(fileList) {
         
     } catch (error) {
         showLoading(false); 
-        console.error("File processing error:", error);
-        showAlert('error', 'เกิดข้อผิดพลาดในการรวบรวมไฟล์รูปภาพ กรุณาลองใหม่อีกครั้ง');
+        showAlert('error', 'เกิดข้อผิดพลาดในการรวบรวมไฟล์ กรุณาลองใหม่อีกครั้ง');
         clearSelectedFile();
     }
 }
 
-// ==========================================
-// ฟังก์ชันเสริม (เพิ่มเข้าไปต่อท้ายไฟล์ script.js)
-// ==========================================
-// ใช้เพื่อดึงความกว้างและความสูงของรูปภาพ (ป้องกันรูปยืด/เบี้ยว)
 function getImageDimensions(dataUrl) {
     return new Promise((resolve) => {
         const img = new Image();
-        img.onload = () => {
-            resolve({ width: img.width, height: img.height });
-        };
+        img.onload = () => resolve({ width: img.width, height: img.height });
         img.src = dataUrl;
     });
 }
@@ -840,7 +761,7 @@ function clearSelectedFile() {
 }
 
 // ==========================================
-// 6. Form Submission & Preview
+// 9. Validation & Final Submission
 // ==========================================
 function checkCitizenIdChecksum(id) {
   if (!id || id.length !== 13 || !/^\d{13}$/.test(id)) return false;
@@ -881,16 +802,15 @@ async function handleValidateAndPreview() {
     return showAlert('error', 'กรุณาแนบเอกสารข้อตกลง NDA (PDF 1 ไฟล์ หรือ รูปภาพหลายไฟล์)');
   }
 
-  // 💡 การแก้ไขสำคัญ: สร้างข้อมูลจำลองของไฟล์ เพื่อไม่ให้ Payload ใหญ่เกินไปจนการตรวจสอบค้าง
   const dummyFileData = AppState.selectedFiles.map(f => ({
       filename: f.filename,
       mimeType: f.mimeType,
-      base64: '' // ลบข้อมูลก้อนไฟล์ทิ้งชั่วคราวตอนตรวจสอบ
+      base64: '' 
   }));
 
   const payload = {
     citizenId, firstname, lastname, firstnameEn, lastnameEn, email, phone, ssoBranchCode, pollingStationId,
-    fileData: dummyFileData // ส่งข้อมูลหลอกไปให้ฝั่งเซิร์ฟเวอร์เช็คชื่ออย่างเดียว
+    fileData: dummyFileData 
   };
 
   showLoading(true, 'กำลังตรวจสอบข้อมูลและความซ้ำซ้อน...');
@@ -900,7 +820,6 @@ async function handleValidateAndPreview() {
       showLoading(false);
       
       if (res && res.success) {
-        // ดักจับกรณีที่ Backend ส่งข้อมูลกลับมาไม่ครบ ให้ทำ Masking ตัวเลขจากฝั่งหน้าเว็บแทน
         const maskedId = (res.data && res.data.maskedCitizenId) ? res.data.maskedCitizenId : maskCitizenIdForSearch(citizenId);
         
         document.getElementById('prevCitizenId').textContent = maskedId;
@@ -971,9 +890,8 @@ async function handleFinalSubmit() {
 }
 
 // ==========================================
-// 7. Helper Functions ทั่วไป
+// 10. Helper Functions ทั่วไป
 // ==========================================
-
 function showAlert(type, message) {
   const alertBox = document.getElementById('alertBox');
   const alertIcon = document.getElementById('alertIcon');
@@ -1073,13 +991,10 @@ function clearStatusForm() {
     if (searchPhone) searchPhone.value = '';
     if (searchCaptcha) searchCaptcha.value = '';
 
-    const chkForgotId = document.getElementById('chkForgotId');
-    const forgotIdContainer = document.getElementById('forgotIdContainer');
     const lookupInput = document.getElementById('lookupCitizenId');
-
-    if (chkForgotId) chkForgotId.checked = false;
-    if (forgotIdContainer) forgotIdContainer.classList.add('hidden');
+    const lookupPhone = document.getElementById('lookupPhone');
     if (lookupInput) lookupInput.value = '';
+    if (lookupPhone) lookupPhone.value = '';
     AppStateStatus.rawCitizenId = '';
 
     generateCaptcha();
