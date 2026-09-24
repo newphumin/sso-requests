@@ -551,13 +551,14 @@
                     </div>
                 </div>
                 
-                <!-- ปุ่มกดยืนยัน Modal -->
-                <div class="px-6 py-4 bg-govgray-50 border-t border-govgray-200 flex justify-end space-x-3">
-                    <button type="button" onclick="toggleModal('forgotIdModal', false)" class="px-4 py-2 bg-white hover:bg-govgray-100 border border-govgray-300 text-govgray-700 text-sm font-medium rounded-lg transition-colors w-full sm:w-auto">
+                <!-- ส่วนท้าย Modal (ลบปุ่มดึงข้อมูลทิ้ง เปลี่ยนเป็นข้อความสถานะ) -->
+                <div class="px-6 py-4 bg-govgray-50 border-t border-govgray-200 flex justify-between items-center">
+                    <span class="text-[13px] text-govblue-600 font-medium flex items-center gap-1.5">
+                        <svg class="w-4 h-4 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                        ระบบจะค้นหาอัตโนมัติเมื่อกรอกครบ
+                    </span>
+                    <button type="button" onclick="toggleModal('forgotIdModal', false)" class="px-4 py-2 bg-white hover:bg-govgray-100 border border-govgray-300 text-govgray-700 text-sm font-medium rounded-lg transition-colors">
                         ยกเลิก
-                    </button>
-                    <button type="button" id="btnFetchReqId" class="px-6 py-2 bg-govblue-600 hover:bg-govblue-700 text-white text-sm font-medium rounded-lg shadow-sm transition-colors w-full sm:w-auto">
-                        ดึงรหัสคำขอ
                     </button>
                 </div>
             </div>
