@@ -761,48 +761,35 @@ async function handleValidateAndPreview() {
 
   showLoading(true, 'กำลังตรวจสอบข้อมูลและความซ้ำซ้อน...');
   
-  if (typeof google !== 'undefined' && google.script) {
-      google.script.run
-        .withSuccessHandler((res) => {
-          showLoading(false);
-          if (res && res.success) {
-            document.getElementById('prevCitizenId').textContent = res.data.maskedCitizenId;
-            document.getElementById('prevName').textContent = `${maskNameClient(firstname)} ${maskNameClient(lastname)}`;
-            
-            const prevNameEnEl = document.getElementById('prevNameEn');
-            if (prevNameEnEl) prevNameEnEl.textContent = `${maskNameClient(firstnameEn)} ${maskNameClient(lastnameEn)}`;
+  try {
+      const res = await API.call('apiValidateBeforePreview', payload);
+      showLoading(false);
+      
+      if (res && res.success) {
+        document.getElementById('prevCitizenId').textContent = res.data.maskedCitizenId;
+        document.getElementById('prevName').textContent = `${maskNameClient(firstname)} ${maskNameClient(lastname)}`;
+        
+        const prevNameEnEl = document.getElementById('prevNameEn');
+        if (prevNameEnEl) prevNameEnEl.textContent = `${maskNameClient(firstnameEn)} ${maskNameClient(lastnameEn)}`;
 
-            document.getElementById('prevEmail').textContent = email;
-            document.getElementById('prevPhone').textContent = phone;
-            document.getElementById('prevSsoBranch').textContent = ssoBranchCode;
-            document.getElementById('prevPollingStation').textContent = pollingStationId;
-            
-            if (AppState.selectedFiles.length === 1) {
-                document.getElementById('prevFileName').textContent = AppState.selectedFiles[0].filename;
-            } else {
-                document.getElementById('prevFileName').textContent = `รูปภาพจำนวน ${AppState.selectedFiles.length} ไฟล์`;
-            }
+        document.getElementById('prevEmail').textContent = email;
+        document.getElementById('prevPhone').textContent = phone;
+        document.getElementById('prevSsoBranch').textContent = ssoBranchCode;
+        document.getElementById('prevPollingStation').textContent = pollingStationId;
+        
+        if (AppState.selectedFiles.length === 1) {
+            document.getElementById('prevFileName').textContent = AppState.selectedFiles[0].filename;
+        } else {
+            document.getElementById('prevFileName').textContent = `รูปภาพจำนวน ${AppState.selectedFiles.length} ไฟล์`;
+        }
 
-            toggleModal('previewModal', true);
-          } else {
-            showAlert('error', res.message || 'การตรวจสอบข้อมูลไม่ผ่าน');
-          }
-        })
-        .withFailureHandler((err) => {
-          showLoading(false);
-          showAlert('error', err.message || 'เกิดข้อผิดพลาดในการเชื่อมต่อกับเซิร์ฟเวอร์ กรุณาลองใหม่อีกครั้ง');
-        })
-        .apiValidateBeforePreview(payload);
-  } else {
-      try {
-          const res = await API.call('apiValidateBeforePreview', payload);
-          showLoading(false);
-          // (กระบวนการแสดงผลเหมือนเดิม)
-          // ⚠️ ละส่วนนี้ไว้เพื่อความสั้นกระชับ สามารถก๊อปปี้บล็อก if(res.success) ด้านบนมาวางได้เลย
-      } catch(err) {
-          showLoading(false);
-          showAlert('error', 'การเชื่อมต่อขัดข้อง');
+        toggleModal('previewModal', true);
+      } else {
+        showAlert('error', res.message || 'การตรวจสอบข้อมูลไม่ผ่าน');
       }
+  } catch(err) {
+      showLoading(false);
+      showAlert('error', 'ข้อผิดพลาด: ' + err.message);
   }
 }
 
@@ -811,7 +798,7 @@ async function handleFinalSubmit() {
   toggleModal('previewModal', false);
 
   AppState.isSubmitting = true;
-  showLoading(true, 'กำลังส่งคำขอและสร้าง Request ID (กรุณาอย่าปิดหน้านี้)...');
+  showLoading(true, 'กำลังอัปโหลดไฟล์และสร้างคำขอ (อาจใช้เวลาสักครู่)...');
 
   const payload = {
     citizenId: document.getElementById('citizenId').value.trim(),
@@ -826,38 +813,23 @@ async function handleFinalSubmit() {
     fileData: AppState.selectedFiles 
   };
 
-  if (typeof google !== 'undefined' && google.script) {
-      google.script.run
-        .withSuccessHandler((res) => {
-          showLoading(false);
-          AppState.isSubmitting = false;
+  try {
+      const res = await API.call('apiSubmitRequest', payload);
+      showLoading(false);
+      AppState.isSubmitting = false;
 
-          if (res && res.success && res.data) {
-            document.getElementById('displayRequestId').textContent = res.data.requestId;
-            document.getElementById('formSection').classList.add('hidden');
-            document.getElementById('successSection').classList.remove('hidden');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          } else {
-            showAlert('error', res.message || 'ไม่สามารถส่งคำขอได้ กรุณาลองใหม่อีกครั้ง');
-          }
-        })
-        .withFailureHandler((err) => {
-          showLoading(false);
-          AppState.isSubmitting = false;
-          showAlert('error', 'เกิดข้อผิดพลาดในการประมวลผล: ' + err.message);
-        })
-        .apiSubmitRequest(payload);
-  } else {
-      try {
-          const res = await API.call('apiSubmitRequest', payload);
-          showLoading(false);
-          AppState.isSubmitting = false;
-          // (กระบวนการแสดงผลความสำเร็จเหมือนเดิม)
-      } catch(err) {
-          showLoading(false);
-          AppState.isSubmitting = false;
-          showAlert('error', 'ระบบขัดข้อง');
+      if (res && res.success && res.data) {
+        document.getElementById('displayRequestId').textContent = res.data.requestId;
+        document.getElementById('formSection').classList.add('hidden');
+        document.getElementById('successSection').classList.remove('hidden');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } else {
+        showAlert('error', res.message || 'ไม่สามารถส่งคำขอได้ กรุณาลองใหม่อีกครั้ง');
       }
+  } catch(err) {
+      showLoading(false);
+      AppState.isSubmitting = false;
+      showAlert('error', 'ระบบขัดข้องระหว่างบันทึกข้อมูล: ' + err.message);
   }
 }
 
