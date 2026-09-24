@@ -442,14 +442,26 @@ function setupForgotIdSystem() {
     const lookupInput = document.getElementById('lookupCitizenId');
     const lookupPhone = document.getElementById('lookupPhone'); // ช่องเบอร์โทรใน Modal
 
+    // 💡 ฟังก์ชันใหม่: เช็คว่าพิมพ์ครบหรือยัง ถ้าครบให้ดึงข้อมูลเลย
+    const checkAndFetchAuto = () => {
+        const rawId = AppStateStatus.rawCitizenId || '';
+        const phone = lookupPhone ? lookupPhone.value.trim() : '';
+        
+        // เมื่อบัตรครบ 13 หลัก และเบอร์โทรครบ 10 หลัก ให้เรียก API ทันที
+        if (rawId.length === 13 && phone.length === 10) {
+            fetchRequestId();
+        }
+    };
+
     if (lookupInput) {
         lookupInput.addEventListener('input', function(e) {
             AppStateStatus.rawCitizenId = e.target.value.replace(/\D/g, '').substring(0, 13);
             e.target.value = AppStateStatus.rawCitizenId;
+            checkAndFetchAuto(); // เรียกเช็คทุกครั้งที่พิมพ์บัตร ปชช.
         });
 
         lookupInput.addEventListener('blur', function(e) {
-            if (AppStateStatus.rawCitizenId.length === 13) {
+            if (AppStateStatus.rawCitizenId && AppStateStatus.rawCitizenId.length === 13) {
                 e.target.value = `${AppStateStatus.rawCitizenId[0]}-xxxx-xxxxx-xx-${AppStateStatus.rawCitizenId[12]}`;
             }
         });
@@ -461,9 +473,11 @@ function setupForgotIdSystem() {
         });
     }
     
-    // บังคับให้เบอร์โทรใน Modal พิมพ์ได้แค่ตัวเลข
     if (lookupPhone) {
-        lookupPhone.addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
+        lookupPhone.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\D/g, '').substring(0, 10);
+            checkAndFetchAuto(); // เรียกเช็คทุกครั้งที่พิมพ์เบอร์โทร
+        });
     }
 }
 
