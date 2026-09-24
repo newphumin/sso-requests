@@ -278,68 +278,162 @@ function handleStatusSuccess(res) {
     
     const searchResultArea = document.getElementById('searchResultArea');
     if (res && res.success && res.data) {
-      if (searchResultArea) searchResultArea.classList.remove('hidden');
-      
-      if (res.data.isApproved) {
+        if (searchResultArea) searchResultArea.classList.remove('hidden');
+        
         const d = res.data.data;
+        // เนื่องจาก Cloudflare Worker ส่งมาแค่ isApproved เราจะเช็คสถานะจริงจาก d.status
+        const actualStatus = d.status; 
+        
         const resultPending = document.getElementById('resultPending');
         const resultApproved = document.getElementById('resultApproved');
-        
+        const resStatusEl = document.getElementById('resStatus');
+
+        // รีเซ็ตการแสดงผลก่อน
+        if (resultApproved) resultApproved.classList.add('hidden');
         if (resultPending) resultPending.classList.add('hidden');
-        if (resultApproved) resultApproved.classList.remove('hidden');
         
-        if (document.getElementById('resStatus')) document.getElementById('resStatus').textContent = d.status;
-        if (document.getElementById('resUsername')) document.getElementById('resUsername').textContent = d.username;
-        
-        const resPasswordEl = document.getElementById('resPassword');
-        const btnToggle = document.getElementById('btnTogglePassword');
-        
-        if (resPasswordEl) {
-            const rawPassword = d.password || '';
-            resPasswordEl.setAttribute('data-password', rawPassword);
-            resPasswordEl.textContent = '••••••••';
+        if (actualStatus === 'Approved' || actualStatus === 'อนุมัติแล้ว') {
+            // ==========================================
+            // กรณี: อนุมัติ (โชว์ข้อมูลครบถ้วน)
+            // ==========================================
+            if (resultApproved) resultApproved.classList.remove('hidden');
             
-            AppStateStatus.isPasswordVisible = false;
+            if (resStatusEl) {
+                resStatusEl.textContent = actualStatus;
+                // ปรับแต่งสีข้อความและพื้นหลังให้เป็นสีเขียว
+                resStatusEl.style.color = '#198754';
+                resStatusEl.style.backgroundColor = '#d1e7dd';
+            }
+
+            if (document.getElementById('resUsername')) document.getElementById('resUsername').textContent = d.username || '-';
             
-            if (rawPassword) {
-                if(btnToggle) btnToggle.classList.remove('hidden'); 
-            } else {
-                if(btnToggle) btnToggle.classList.add('hidden'); 
+            const resPasswordEl = document.getElementById('resPassword');
+            const btnToggle = document.getElementById('btnTogglePassword');
+            
+            if (resPasswordEl) {
+                const rawPassword = d.password || '';
+                resPasswordEl.setAttribute('data-password', rawPassword);
+                resPasswordEl.textContent = '••••••••';
+                
+                AppStateStatus.isPasswordVisible = false;
+                
+                if (rawPassword) {
+                    if(btnToggle) btnToggle.classList.remove('hidden'); 
+                } else {
+                    if(btnToggle) btnToggle.classList.add('hidden'); 
+                }
+                
+                const iconEyeOff = document.getElementById('iconEyeOff');
+                const iconEyeOn = document.getElementById('iconEyeOn');
+                if (iconEyeOff) iconEyeOff.classList.remove('hidden');
+                if (iconEyeOn) iconEyeOn.classList.add('hidden');
             }
             
-            const iconEyeOff = document.getElementById('iconEyeOff');
-            const iconEyeOn = document.getElementById('iconEyeOn');
-            if (iconEyeOff) iconEyeOff.classList.remove('hidden');
-            if (iconEyeOn) iconEyeOn.classList.add('hidden');
-        }
-        
-        const rowRemark = document.getElementById('rowRemark');
-        if (rowRemark) {
-            if (d.remark) {
-                document.getElementById('resRemark').textContent = d.remark;
-                rowRemark.classList.remove('hidden');
-                rowRemark.classList.add('grid'); 
-            } else {
-                rowRemark.classList.add('hidden');
-                rowRemark.classList.remove('grid');
+            const rowRemark = document.getElementById('rowRemark');
+            if (rowRemark) {
+                if (d.remark) {
+                    document.getElementById('resRemark').textContent = d.remark;
+                    rowRemark.classList.remove('hidden');
+                    rowRemark.classList.add('grid'); 
+                } else {
+                    rowRemark.classList.add('hidden');
+                    rowRemark.classList.remove('grid');
+                }
+            }
+
+            if (document.getElementById('resCitizenId')) document.getElementById('resCitizenId').textContent = maskCitizenIdForSearch(d.citizenId);
+            if (document.getElementById('resName')) document.getElementById('resName').textContent = `${d.firstname} ${d.lastname}`;
+            if (document.getElementById('resNameEn')) document.getElementById('resNameEn').textContent = `${d.firstnameEn} ${d.lastnameEn}`;
+            if (document.getElementById('resEmail')) document.getElementById('resEmail').textContent = d.email;
+            if (document.getElementById('resPhone')) document.getElementById('resPhone').textContent = d.phone;
+            if (document.getElementById('resSso')) document.getElementById('resSso').textContent = d.ssoBranchDisplay;
+            if (document.getElementById('resStation')) document.getElementById('resStation').textContent = d.pollingStationDisplay;
+
+        } else if (actualStatus === 'ไม่อนุมัติ' || actualStatus === 'Rejected') {
+            // ==========================================
+            // กรณี: ไม่อนุมัติ (โชว์กล่องแดง ประยุกต์ใช้ element ของ resultPending)
+            // ==========================================
+            if (resultPending) {
+                resultPending.classList.remove('hidden');
+                
+                // ค้นหา Element ภายในเพื่อปรับแต่งข้อความและสี
+                const titleEl = resultPending.querySelector('h5');
+                const descEl = resultPending.querySelector('.text-center.text-gray-500'); // สมมติว่ามี class นี้
+                const iconBox = resultPending.querySelector('div.bg-yellow-100'); // สมมติว่านี่คือกล่องใส่ไอคอนตกใจ
+
+                // ปรับเปลี่ยนหน้าตาให้เป็นสีแดง (ไม่อนุมัติ)
+                resultPending.style.borderColor = '#f5c2c7';
+                
+                if (iconBox) {
+                    iconBox.style.backgroundColor = '#dc3545';
+                    iconBox.style.color = 'white';
+                    iconBox.innerHTML = '✕';
+                }
+                
+                if (titleEl) {
+                    titleEl.textContent = 'คำขอไม่ผ่านการอนุมัติ';
+                    titleEl.style.color = '#842029';
+                    titleEl.parentElement.style.backgroundColor = '#f8d7da';
+                    titleEl.parentElement.style.borderColor = '#f5c2c7';
+                }
+
+                if (descEl) {
+                    const remarkText = d.remark || 'ไม่ได้ระบุสาเหตุ (กรุณาติดต่อเจ้าหน้าที่)';
+                    descEl.style.color = '#212529';
+                    descEl.style.textAlign = 'left';
+                    descEl.innerHTML = `
+                        <div style="display: flex; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #dee2e6;">
+                            <strong style="width: 120px; color: #dc3545;">สถานะ:</strong> 
+                            <span>ไม่อนุมัติ (Rejected)</span>
+                        </div>
+                        <div style="display: flex;">
+                            <strong style="width: 120px; color: #6c757d;">สาเหตุ:</strong> 
+                            <span>${remarkText}</span>
+                        </div>
+                    `;
+                }
+            }
+
+        } else {
+            // ==========================================
+            // กรณี: รอพิจารณา (Pending)
+            // ==========================================
+            if (resultPending) {
+                resultPending.classList.remove('hidden');
+                
+                // คืนค่ารูปแบบกลับไปเป็นสีเหลือง (Pending)
+                resultPending.style.borderColor = '#ffeeba';
+                
+                const titleEl = resultPending.querySelector('h5');
+                const descEl = resultPending.querySelector('.text-center');
+                const iconBox = resultPending.querySelector('div[style*="background-color: #dc3545"]'); // ค้นหากล่องที่อาจถูกเปลี่ยนเป็นสีแดงไปแล้ว
+                const headerBox = titleEl ? titleEl.parentElement : null;
+
+                if (iconBox) {
+                    iconBox.style.backgroundColor = '#ffc107';
+                    iconBox.style.color = '#000';
+                    iconBox.innerHTML = '!'; // ไอคอนตกใจ
+                }
+                
+                if (titleEl) {
+                    titleEl.textContent = 'อยู่ระหว่างการพิจารณา';
+                    titleEl.style.color = '#856404';
+                    if (headerBox) {
+                        headerBox.style.backgroundColor = '#fff3cd';
+                        headerBox.style.borderColor = '#ffeeba';
+                    }
+                }
+
+                if (descEl) {
+                    descEl.style.color = '#6c757d';
+                    descEl.style.textAlign = 'center';
+                    descEl.textContent = 'คำขอของคุณกำลังอยู่ในขั้นตอนการตรวจสอบ กรุณากลับมาตรวจสอบสถานะอีกครั้งในภายหลัง';
+                }
             }
         }
 
-        if (document.getElementById('resCitizenId')) document.getElementById('resCitizenId').textContent = maskCitizenIdForSearch(d.citizenId);
-        if (document.getElementById('resName')) document.getElementById('resName').textContent = `${d.firstname} ${d.lastname}`;
-        if (document.getElementById('resNameEn')) document.getElementById('resNameEn').textContent = `${d.firstnameEn} ${d.lastnameEn}`;
-        if (document.getElementById('resEmail')) document.getElementById('resEmail').textContent = d.email;
-        if (document.getElementById('resPhone')) document.getElementById('resPhone').textContent = d.phone;
-        if (document.getElementById('resSso')) document.getElementById('resSso').textContent = d.ssoBranchDisplay;
-        if (document.getElementById('resStation')) document.getElementById('resStation').textContent = d.pollingStationDisplay;
-      } else {
-        const resultPending = document.getElementById('resultPending');
-        const resultApproved = document.getElementById('resultApproved');
-        if (resultApproved) resultApproved.classList.add('hidden');
-        if (resultPending) resultPending.classList.remove('hidden');
-      }
     } else {
-      showAlert('error', res.message || 'ไม่พบข้อมูลคำขอ กรุณาตรวจสอบรหัสอ้างอิงและเบอร์โทรศัพท์อีกครั้ง');
+        showAlert('error', res.message || 'ไม่พบข้อมูลคำขอ กรุณาตรวจสอบรหัสอ้างอิงและเบอร์โทรศัพท์อีกครั้ง');
     }
 }
 
@@ -630,79 +724,144 @@ function handleFileSelection(event) {
 }
 
 async function processFiles(fileList) {
-  const maxSize = 10 * 1024 * 1024; 
-  const validExts = ['pdf', 'jpg', 'jpeg', 'png'];
-  const files = Array.from(fileList);
-  
-  let totalSize = 0;
-  let hasPdf = false;
-  let hasImg = false;
-  let validFiles = [];
-
-  for (let i = 0; i < files.length; i++) {
-    const f = files[i];
-    const ext = f.name.split('.').pop().toLowerCase();
+    const maxSize = 10 * 1024 * 1024; 
+    const validExts = ['pdf', 'jpg', 'jpeg', 'png'];
+    const files = Array.from(fileList);
     
-    if (!validExts.includes(ext)) {
-      showAlert('error', `ระบบไม่รองรับไฟล์สกุล .${ext} (รองรับเฉพาะ PDF, JPG, PNG)`);
-      clearSelectedFile();
-      return;
+    let totalSize = 0;
+    let hasPdf = false;
+    let hasImg = false;
+    let validFiles = [];
+
+    // 1. ตรวจสอบประเภทและขนาดไฟล์เบื้องต้น
+    for (let i = 0; i < files.length; i++) {
+        const f = files[i];
+        const ext = f.name.split('.').pop().toLowerCase();
+        
+        if (!validExts.includes(ext)) {
+            showAlert('error', `ระบบไม่รองรับไฟล์สกุล .${ext} (รองรับเฉพาะ PDF, JPG, PNG)`);
+            clearSelectedFile();
+            return;
+        }
+        
+        if (ext === 'pdf') hasPdf = true;
+        else hasImg = true;
+        
+        totalSize += f.size;
+        validFiles.push(f);
     }
-    
-    if (ext === 'pdf') hasPdf = true;
-    else hasImg = true;
-    
-    totalSize += f.size;
-    validFiles.push(f);
-  }
 
-  if (hasPdf && hasImg) {
-    showAlert('error', 'ไม่สามารถแนบไฟล์ PDF ร่วมกับไฟล์รูปภาพได้ กรุณาเลือกประเภทใดประเภทหนึ่ง');
-    clearSelectedFile();
-    return;
-  }
-  if (hasPdf && validFiles.length > 1) {
-    showAlert('error', 'หากเป็นไฟล์ PDF กรุณาแนบเพียง 1 ไฟล์เท่านั้น');
-    clearSelectedFile();
-    return;
-  }
-  if (totalSize > maxSize) {
-    showAlert('error', `ขนาดไฟล์รวมทั้งหมดเกิน 10 MB`);
-    clearSelectedFile();
-    return;
-  }
-
-  showLoading(true, 'กำลังเตรียมไฟล์อัปโหลด...');
-  
-  try {
-    AppState.selectedFiles = [];
-
-    const base64Files = await Promise.all(validFiles.map(file => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = e => resolve({ filename: file.name, mimeType: file.type, base64: e.target.result });
-        reader.onerror = e => reject(e);
-        reader.readAsDataURL(file);
-      });
-    }));
-
-    AppState.selectedFiles = base64Files; 
-    
-    const label = document.getElementById('fileNameLabel');
-    if (base64Files.length === 1) {
-      label.textContent = base64Files[0].filename;
-    } else {
-      label.textContent = `เลือกรูปภาพแล้ว ${base64Files.length} ไฟล์ (ระบบจะรวมเป็น 1 PDF อัตโนมัติ)`;
+    if (hasPdf && hasImg) {
+        showAlert('error', 'ไม่สามารถแนบไฟล์ PDF ร่วมกับไฟล์รูปภาพได้ กรุณาเลือกประเภทใดประเภทหนึ่ง');
+        clearSelectedFile();
+        return;
     }
+    if (hasPdf && validFiles.length > 1) {
+        showAlert('error', 'หากเป็นไฟล์ PDF กรุณาแนบเพียง 1 ไฟล์เท่านั้น');
+        clearSelectedFile();
+        return;
+    }
+    if (totalSize > maxSize) {
+        showAlert('error', `ขนาดไฟล์รวมทั้งหมดเกิน 10 MB`);
+        clearSelectedFile();
+        return;
+    }
+
+    showLoading(true, 'กำลังเตรียมไฟล์อัปโหลด...');
     
-    document.getElementById('selectedFileInfo').classList.remove('hidden');
-    hideAlert();
-    showLoading(false); 
-  } catch (error) {
-    showLoading(false); 
-    showAlert('error', 'เกิดข้อผิดพลาดในการอ่านไฟล์ กรุณาลองใหม่อีกครั้ง');
-    clearSelectedFile();
-  }
+    try {
+        AppState.selectedFiles = [];
+
+        // 2. ถ้าเป็นรูปภาพ และมีไลบรารี jspdf โหลดอยู่ ให้รวมเป็น PDF
+        if (hasImg && window.jspdf) {
+            showLoading(true, 'กำลังรวบรวมรูปภาพเป็นไฟล์ PDF...');
+            
+            // ใช้ jspdf (สังเกตว่าต้องดึงมาจาก window.jspdf.jsPDF)
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF('p', 'mm', 'a4'); // กระดาษ A4 แนวตั้ง
+            
+            // วนลูปอ่านรูปภาพทีละรูป
+            for (let i = 0; i < validFiles.length; i++) {
+                const imgDataUrl = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve(e.target.result);
+                    reader.onerror = e => reject(e);
+                    reader.readAsDataURL(validFiles[i]);
+                });
+                
+                // ดึงขนาดจริงของรูปภาพ เพื่อจัดหน้าให้สวยงาม
+                const imgDims = await getImageDimensions(imgDataUrl);
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                
+                // คำนวณอัตราส่วนให้รูปภาพพอดีกับกระดาษ A4
+                const ratio = Math.min(pdfWidth / imgDims.width, pdfHeight / imgDims.height);
+                const imgX = (pdfWidth - imgDims.width * ratio) / 2;
+                const imgY = (pdfHeight - imgDims.height * ratio) / 2;
+                
+                if (i > 0) pdf.addPage(); // ถ้ารูปที่ 2 ขึ้นไป ให้ขึ้นหน้าใหม่
+                
+                // นำรูปลงในหน้า PDF
+                // เช็คว่าไฟล์ที่ดึงมาเป็น PNG หรือไม่ ถ้าไม่ใช่ให้ใช้ JPEG เป็นค่าเริ่มต้น
+              const imgFormat = validFiles[i].type === 'image/png' ? 'PNG' : 'JPEG';
+              pdf.addImage(imgDataUrl, imgFormat, imgX, imgY, imgDims.width * ratio, imgDims.height * ratio);
+            }
+            
+            // แปลงไฟล์ PDF ที่สร้างเสร็จแล้วให้อยู่ในรูปแบบ Base64
+            const pdfDataUri = pdf.output('datauristring');
+            
+            // เก็บข้อมูลจำลองการเป็น PDF 1 ไฟล์เข้าระบบ
+            AppState.selectedFiles = [{
+                filename: `NDA_Document_Merged.pdf`,
+                mimeType: 'application/pdf',
+                base64: pdfDataUri
+            }];
+            
+        } else {
+            // 3. ถ้าเป็น PDF อยู่แล้ว หรือไม่มี jspdf ให้โหลดแบบปกติ
+            const base64Files = await Promise.all(validFiles.map(file => {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = e => resolve({ filename: file.name, mimeType: file.type, base64: e.target.result });
+                    reader.onerror = e => reject(e);
+                    reader.readAsDataURL(file);
+                });
+            }));
+            AppState.selectedFiles = base64Files; 
+        }
+        
+        // 4. แสดงผลลัพธ์บนหน้าจอ
+        const label = document.getElementById('fileNameLabel');
+        if (AppState.selectedFiles.length === 1) {
+            label.textContent = AppState.selectedFiles[0].filename;
+        } else {
+            label.textContent = `เลือกรูปภาพแล้ว ${AppState.selectedFiles.length} ไฟล์ (ระบบจะรวมเป็น 1 PDF อัตโนมัติ)`;
+        }
+        
+        document.getElementById('selectedFileInfo').classList.remove('hidden');
+        hideAlert();
+        showLoading(false); 
+        
+    } catch (error) {
+        showLoading(false); 
+        console.error("File processing error:", error);
+        showAlert('error', 'เกิดข้อผิดพลาดในการรวบรวมไฟล์รูปภาพ กรุณาลองใหม่อีกครั้ง');
+        clearSelectedFile();
+    }
+}
+
+// ==========================================
+// ฟังก์ชันเสริม (เพิ่มเข้าไปต่อท้ายไฟล์ script.js)
+// ==========================================
+// ใช้เพื่อดึงความกว้างและความสูงของรูปภาพ (ป้องกันรูปยืด/เบี้ยว)
+function getImageDimensions(dataUrl) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            resolve({ width: img.width, height: img.height });
+        };
+        img.src = dataUrl;
+    });
 }
 
 function clearSelectedFile() {
