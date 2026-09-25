@@ -60,7 +60,7 @@ const API = {
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
-  loadInitialReferenceData(); // โหลดรายชื่อ สปส. จากหลังบ้าน
+  loadInitialReferenceData(); // โหลดรายชื่อ สปส. และเช็คสถานะปิด-เปิดเว็บ
   generateCaptcha(); 
 });
 
@@ -154,7 +154,7 @@ function switchTab(tabName) {
   // เคลียร์ค่าใน Modal เผื่อไว้
   const lookupInput = document.getElementById('lookupCitizenId');
   const lookupPhone = document.getElementById('lookupPhone');
-  if (lookupInput) lookupInput.value = '';
+  if (lookupInput) { lookupInput.value = ''; lookupInput.dataset.raw = ''; }
   if (lookupPhone) lookupPhone.value = '';
   AppStateStatus.rawCitizenId = ''; 
   
@@ -169,13 +169,20 @@ function switchTab(tabName) {
   if (tabName === 'form') {
     sectionForm.classList.remove('hidden');
     sectionStatus.classList.add('hidden');
-    tabFormBtn.className = activeClass;
+    
+    // ดักไว้เผื่อปุ่มโดน disable อยู่ตอนปิดเว็บ
+    if (!tabFormBtn.disabled) {
+       tabFormBtn.className = activeClass;
+    }
     tabStatusBtn.className = inactiveClass;
   } else {
     sectionForm.classList.add('hidden');
     sectionStatus.classList.remove('hidden');
     tabStatusBtn.className = activeClass;
-    tabFormBtn.className = inactiveClass;
+    
+    if (!tabFormBtn.disabled) {
+      tabFormBtn.className = inactiveClass;
+    }
     
     generateCaptcha(); 
   }
@@ -214,6 +221,10 @@ function setupForgotIdSystem() {
 
     const checkAndFetchAuto = () => {
         if (typeof AppStateStatus === 'undefined') return; 
+        
+        // เช็คว่าหน้าต่าง Modal กู้คืนรหัสเปิดอยู่หรือเปล่า (กันระบบแอบยิง API ตอนสลับหน้า)
+        const isModalOpen = !document.getElementById('forgotIdModal').classList.contains('hidden');
+        if (!isModalOpen) return;
         
         const rawId = AppStateStatus.rawCitizenId || '';
         const phone = lookupPhone ? lookupPhone.value.trim() : '';
@@ -278,6 +289,7 @@ async function fetchRequestIdAuto() {
             
             showAlert('success', 'ดึงรหัสคำขอสำเร็จ! ระบบเติมข้อมูลในช่องค้นหาให้เรียบร้อยแล้ว กรุณายืนยันตัวตนเพื่อค้นหาข้อมูล');
             
+            // ล้างค่าใน Modal
             document.getElementById('lookupCitizenId').value = '';
             document.getElementById('lookupPhone').value = '';
             AppStateStatus.rawCitizenId = '';
@@ -296,7 +308,187 @@ async function fetchRequestIdAuto() {
 
 
 // ==========================================
-// 5. ฟังก์ชันค้นหาสถานะคำขอ 
+// 5.ปรับปรุงฟังก์ชันโหลดข้อมูลเริ่มต้น (เช็คสถานะปิดระบบ)
+// ==========================================
+
+async function loadInitialReferenceData() {
+    showLoading(true, 'กำลังเชื่อมต่อระบบส่วนกลาง...');
+    
+    try {
+        // 1. ตรวจสอบสถานะระบบก่อนเป็นอันดับแรก
+        const statusRes = await API.call('apiGetSystemStatus');
+        
+        // 🚨 กรณีระบบถูกตั้งเป็น "closed" (ปิดรับคำขอ)
+        if (statusRes && statusRes.success && statusRes.status === 'closed') {
+            showLoading(false);
+            
+            const formSection = document.getElementById('formSection');
+            const closedSystemMessage = document.getElementById('closedSystemMessage');
+            
+            if (formSection) {
+                formSection.classList.add('hidden'); 
+            }
+            if (closedSystemMessage) {
+                closedSystemMessage.classList.remove('hidden'); 
+            }
+            
+            // ปิดไม่ให้กดปุ่ม "ยื่นแบบคำขอ" ด้านบนได้
+            const tabFormBtn = document.getElementById('tabForm');
+            if (tabFormBtn) {
+                tabFormBtn.disabled = true;
+                tabFormBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                tabFormBtn.onclick = null; 
+            }
+            
+            // สลับไปหน้า "ตรวจสอบสถานะ" ให้อัตโนมัติ (หน่วงเวลาให้ UI อัปเดตเสร็จ)
+            setTimeout(() => {
+                if (!formSection || formSection.classList.contains('hidden')) {
+                    switchTab('status'); 
+                }
+            }, 100);
+
+            return; // 🛑 หยุดการทำงานแค่นี้ ไม่ต้องโหลดรายชื่อ สปส. ต่อ
+        } 
+        
+        // 🟢 กรณีระบบ "open" (เปิดปกติ)
+        else {
+            const formSection = document.getElementById('formSection');
+            const closedSystemMessage = document.getElementById('closedSystemMessage');
+            
+            if (formSection) formSection.classList.remove('hidden'); 
+            if (closedSystemMessage) closedSystemMessage.classList.add('hidden'); 
+            
+            const tabFormBtn = document.getElementById('tabForm');
+            if (tabFormBtn) {
+                tabFormBtn.disabled = false;
+                tabFormBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                tabFormBtn.onclick = () => switchTab('form'); 
+            }
+        }
+        
+        // 2. ถ้าระบบเปิดอยู่ ให้โหลดข้อมูลหน่วยงาน สปส. มาใส่ Dropdown ตามปกติ
+        showLoading(true, 'กำลังโหลดข้อมูลหน่วยงาน สปส....');
+        const res = await API.call('apiGetInitialData');
+        showLoading(false);
+        
+        if (res && res.success && res.data && res.data.branches) {
+            AppState.branches = res.data.branches;
+            populateBranchDropdown(res.data.branches);
+        } else {
+            showAlert('error', 'ไม่สามารถโหลดข้อมูลหน่วยงาน สปส. ได้');
+            console.error("Data error:", res);
+        }
+    } catch (err) {
+        showLoading(false);
+        showAlert('error', 'ข้อผิดพลาดเครือข่าย: ' + err.message);
+    }
+}
+
+function populateBranchDropdown(branches) {
+  const select = document.getElementById('ssoBranchCode');
+  if(!select) return;
+  select.innerHTML = '<option value="">-- เลือกรหัสสำนักงานประกันสังคม --</option>';
+  branches.forEach(b => {
+    const opt = document.createElement('option');
+    opt.value = b.code;
+    opt.textContent = `${b.code} - ${b.name} (${b.province})`;
+    select.appendChild(opt);
+  });
+}
+
+async function handleBranchChange(branchCode) {
+  const stationSelect = document.getElementById('pollingStationId');
+  const detailBox = document.getElementById('stationDetailBox');
+  if (detailBox) detailBox.classList.add('hidden');
+  hideAlert(); 
+
+  if (!branchCode) {
+    stationSelect.disabled = true;
+    stationSelect.classList.add('bg-govgray-100', 'text-govgray-500', 'cursor-not-allowed');
+    stationSelect.classList.remove('bg-white', 'text-govgray-900');
+    stationSelect.innerHTML = '<option value="">-- กรุณาเลือกรหัส สปส. ก่อน --</option>';
+    return;
+  }
+
+  showLoading(true, 'กำลังดึงข้อมูลสถานที่เลือกตั้ง...');
+  stationSelect.disabled = true;
+  stationSelect.innerHTML = '<option value="">-- กำลังโหลดข้อมูล... --</option>';
+
+  try {
+      const res = await API.call('apiGetStationsByBranch', branchCode); 
+      showLoading(false);
+      
+      if (res && res.success) {
+        const stations = res.data.stations || [];
+        AppState.stationsCache.set(branchCode, stations); 
+        populateStationDropdown(stations);
+      } else {
+        showAlert('error', res ? res.message : 'ไม่สามารถโหลดข้อมูลสถานที่เลือกตั้งได้');
+        stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาดในการโหลดข้อมูล --</option>';
+      }
+  } catch (err) {
+      showLoading(false);
+      showAlert('error', 'ระบบขัดข้อง: ' + err.message);
+      stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาด --</option>';
+  }
+}
+
+function populateStationDropdown(stations) {
+  const stationSelect = document.getElementById('pollingStationId');
+  if(!stationSelect) return;
+  stationSelect.innerHTML = '';
+
+  if (stations.length === 0) {
+    stationSelect.disabled = true;
+    stationSelect.classList.add('bg-govgray-100', 'text-govgray-500', 'cursor-not-allowed');
+    stationSelect.classList.remove('bg-white', 'text-govgray-900');
+    stationSelect.innerHTML = '<option value="">-- ไม่พบสถานที่เลือกตั้งในสังกัดนี้ --</option>';
+    return;
+  }
+
+  stationSelect.disabled = false;
+  stationSelect.classList.remove('bg-govgray-100', 'text-govgray-500', 'cursor-not-allowed');
+  stationSelect.classList.add('bg-white', 'text-govgray-900');
+  
+  const defaultOpt = document.createElement('option');
+  defaultOpt.value = '';
+  defaultOpt.textContent = `-- เลือกรหัสสถานที่เลือกตั้ง (${stations.length} แห่ง) --`;
+  stationSelect.appendChild(defaultOpt);
+
+  stations.forEach(st => {
+    const opt = document.createElement('option');
+    opt.value = st.id;
+    opt.textContent = `${st.id} : ${st.name} - ${st.location}`;
+    stationSelect.appendChild(opt);
+  });
+}
+
+function handleStationChange(stationId) {
+  const branchCode = document.getElementById('ssoBranchCode').value;
+  const detailBox = document.getElementById('stationDetailBox');
+
+  if (!stationId || !branchCode) {
+    if(detailBox) detailBox.classList.add('hidden');
+    return;
+  }
+
+  const stations = AppState.stationsCache.get(branchCode) || [];
+  const selected = stations.find(s => s.id === stationId);
+
+  if (selected && detailBox) {
+    document.getElementById('detailStationName').textContent = `${selected.id} - ${selected.name}`;
+    document.getElementById('detailLocation').textContent = selected.location || '-';
+    document.getElementById('detailTambon').textContent = selected.tambon || '-';
+    document.getElementById('detailAmphur').textContent = selected.amphur || '-';
+    document.getElementById('detailProvince').textContent = selected.province || '-';
+    detailBox.classList.remove('hidden');
+  } else {
+    if(detailBox) detailBox.classList.add('hidden');
+  }
+}
+
+// ==========================================
+// 6. ฟังก์ชันค้นหาสถานะคำขอ 
 // ==========================================
 async function searchStatus() {
   try {
@@ -459,7 +651,7 @@ function handleStatusError(err) {
 
 
 // ==========================================
-// 6. ระบบดูรหัสผ่าน
+// 7. ระบบดูรหัสผ่าน
 // ==========================================
 function togglePasswordVisibility() {
   const resPasswordEl = document.getElementById('resPassword');
@@ -481,190 +673,6 @@ function togglePasswordVisibility() {
       resPasswordEl.textContent = '••••••••';
       if(iconEyeOff) iconEyeOff.classList.remove('hidden');
       if(iconEyeOn) iconEyeOn.classList.add('hidden');
-  }
-}
-
-// ==========================================
-// 4.ปรับปรุงฟังก์ชันโหลดข้อมูลเริ่มต้น (เช็คสถานะปิดระบบ)
-// ==========================================
-
-async function loadInitialReferenceData() {
-    showLoading(true, 'กำลังเชื่อมต่อระบบส่วนกลาง...');
-    
-    try {
-        // 1. ตรวจสอบสถานะระบบก่อนเป็นอันดับแรก
-        const statusRes = await API.call('apiGetSystemStatus');
-        
-        // 🚨 กรณีระบบถูกตั้งเป็น "closed" (ปิดรับคำขอ)
-        if (statusRes && statusRes.success && statusRes.status === 'closed') {
-            showLoading(false);
-            
-            // ดึง Element ของฟอร์มและกล่องแจ้งเตือน
-            const formSection = document.getElementById('formSection');
-            const closedSystemMessage = document.getElementById('closedSystemMessage');
-            
-            if (formSection) {
-                formSection.classList.add('hidden'); // ซ่อนกล่องฟอร์มทั้งหมด
-            }
-            if (closedSystemMessage) {
-                closedSystemMessage.classList.remove('hidden'); // แสดงกล่องแจ้งเตือนสีแดง
-            }
-            
-            // ปิดไม่ให้กดปุ่ม "ยื่นแบบคำขอ" ด้านบนได้
-            const tabFormBtn = document.getElementById('tabForm');
-            if (tabFormBtn) {
-                tabFormBtn.disabled = true;
-                tabFormBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                tabFormBtn.onclick = null; // ยกเลิก event คลิก
-            }
-            
-            // สลับไปหน้า "ตรวจสอบสถานะ" ให้อัตโนมัติ (เพื่อไม่ให้หน้าจอโล่ง)
-            // เราหน่วงเวลาเล็กน้อยเพื่อให้ UI อัปเดตเสร็จก่อน
-            setTimeout(() => {
-                const searchReqId = document.getElementById('searchReqId');
-                // เช็คว่าถ้าไม่ใช่หน้าฟอร์ม ให้สลับแท็บ
-                if (!formSection || formSection.classList.contains('hidden')) {
-                     // โค้ดสำหรับแสดงผลป้ายปิดระบบ (จะยังคงแสดงอยู่ด้านบน)
-                }
-            }, 100);
-
-            return; // 🛑 หยุดการทำงานแค่นี้ ไม่ต้องไปโหลดรายชื่อ สปส. ต่อ
-        } 
-        
-        // 🟢 กรณีระบบ "open" (เปิดปกติ)
-        else {
-            const formSection = document.getElementById('formSection');
-            const closedSystemMessage = document.getElementById('closedSystemMessage');
-            
-            if (formSection) formSection.classList.remove('hidden'); // โชว์ฟอร์ม
-            if (closedSystemMessage) closedSystemMessage.classList.add('hidden'); // ซ่อนป้ายแดง
-            
-            const tabFormBtn = document.getElementById('tabForm');
-            if (tabFormBtn) {
-                tabFormBtn.disabled = false;
-                tabFormBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                tabFormBtn.onclick = () => switchTab('form'); // คืนค่า event คลิก
-            }
-        }
-        
-        // 2. ถ้าระบบเปิดอยู่ ให้โหลดข้อมูลหน่วยงาน สปส. มาใส่ Dropdown ตามปกติ
-        showLoading(true, 'กำลังโหลดข้อมูลหน่วยงาน สปส....');
-        const res = await API.call('apiGetInitialData');
-        showLoading(false);
-        
-        if (res && res.success && res.data && res.data.branches) {
-            AppState.branches = res.data.branches;
-            populateBranchDropdown(res.data.branches);
-        } else {
-            showAlert('error', 'ไม่สามารถโหลดข้อมูลหน่วยงาน สปส. ได้');
-            console.error("Data error:", res);
-        }
-    } catch (err) {
-        showLoading(false);
-        showAlert('error', 'ข้อผิดพลาดเครือข่าย: ' + err.message);
-    }
-}
-
-function populateBranchDropdown(branches) {
-  const select = document.getElementById('ssoBranchCode');
-  if(!select) return;
-  select.innerHTML = '<option value="">-- เลือกรหัสสำนักงานประกันสังคม --</option>';
-  branches.forEach(b => {
-    const opt = document.createElement('option');
-    opt.value = b.code;
-    opt.textContent = `${b.code} - ${b.name} (${b.province})`;
-    select.appendChild(opt);
-  });
-}
-
-async function handleBranchChange(branchCode) {
-  const stationSelect = document.getElementById('pollingStationId');
-  const detailBox = document.getElementById('stationDetailBox');
-  if (detailBox) detailBox.classList.add('hidden');
-  hideAlert(); 
-
-  if (!branchCode) {
-    stationSelect.disabled = true;
-    stationSelect.classList.add('bg-govgray-100', 'text-govgray-500', 'cursor-not-allowed');
-    stationSelect.classList.remove('bg-white', 'text-govgray-900');
-    stationSelect.innerHTML = '<option value="">-- กรุณาเลือกรหัส สปส. ก่อน --</option>';
-    return;
-  }
-
-  showLoading(true, 'กำลังดึงข้อมูลสถานที่เลือกตั้ง...');
-  stationSelect.disabled = true;
-  stationSelect.innerHTML = '<option value="">-- กำลังโหลดข้อมูล... --</option>';
-
-  try {
-      const res = await API.call('apiGetStationsByBranch', branchCode); 
-      showLoading(false);
-      
-      if (res && res.success) {
-        const stations = res.data.stations || [];
-        AppState.stationsCache.set(branchCode, stations); 
-        populateStationDropdown(stations);
-      } else {
-        showAlert('error', res ? res.message : 'ไม่สามารถโหลดข้อมูลสถานที่เลือกตั้งได้');
-        stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาดในการโหลดข้อมูล --</option>';
-      }
-  } catch (err) {
-      showLoading(false);
-      showAlert('error', 'ระบบขัดข้อง: ' + err.message);
-      stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาด --</option>';
-  }
-}
-
-function populateStationDropdown(stations) {
-  const stationSelect = document.getElementById('pollingStationId');
-  if(!stationSelect) return;
-  stationSelect.innerHTML = '';
-
-  if (stations.length === 0) {
-    stationSelect.disabled = true;
-    stationSelect.classList.add('bg-govgray-100', 'text-govgray-500', 'cursor-not-allowed');
-    stationSelect.classList.remove('bg-white', 'text-govgray-900');
-    stationSelect.innerHTML = '<option value="">-- ไม่พบสถานที่เลือกตั้งในสังกัดนี้ --</option>';
-    return;
-  }
-
-  stationSelect.disabled = false;
-  stationSelect.classList.remove('bg-govgray-100', 'text-govgray-500', 'cursor-not-allowed');
-  stationSelect.classList.add('bg-white', 'text-govgray-900');
-  
-  const defaultOpt = document.createElement('option');
-  defaultOpt.value = '';
-  defaultOpt.textContent = `-- เลือกรหัสสถานที่เลือกตั้ง (${stations.length} แห่ง) --`;
-  stationSelect.appendChild(defaultOpt);
-
-  stations.forEach(st => {
-    const opt = document.createElement('option');
-    opt.value = st.id;
-    opt.textContent = `${st.id} : ${st.name} - ${st.location}`;
-    stationSelect.appendChild(opt);
-  });
-}
-
-function handleStationChange(stationId) {
-  const branchCode = document.getElementById('ssoBranchCode').value;
-  const detailBox = document.getElementById('stationDetailBox');
-
-  if (!stationId || !branchCode) {
-    if(detailBox) detailBox.classList.add('hidden');
-    return;
-  }
-
-  const stations = AppState.stationsCache.get(branchCode) || [];
-  const selected = stations.find(s => s.id === stationId);
-
-  if (selected && detailBox) {
-    document.getElementById('detailStationName').textContent = `${selected.id} - ${selected.name}`;
-    document.getElementById('detailLocation').textContent = selected.location || '-';
-    document.getElementById('detailTambon').textContent = selected.tambon || '-';
-    document.getElementById('detailAmphur').textContent = selected.amphur || '-';
-    document.getElementById('detailProvince').textContent = selected.province || '-';
-    detailBox.classList.remove('hidden');
-  } else {
-    if(detailBox) detailBox.classList.add('hidden');
   }
 }
 
