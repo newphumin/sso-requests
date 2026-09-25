@@ -485,49 +485,84 @@ function togglePasswordVisibility() {
 }
 
 // ==========================================
-// ปรับปรุงฟังก์ชันโหลดข้อมูลเริ่มต้น ให้ดึงสถานะจาก Supabase ทันที
+// 4.ปรับปรุงฟังก์ชันโหลดข้อมูลเริ่มต้น (เช็คสถานะปิดระบบ)
 // ==========================================
 
 async function loadInitialReferenceData() {
-  showLoading(true, 'กำลังเชื่อมต่อระบบส่วนกลาง...');
-  
-  try {
-      // 1. ตรวจสอบสถานะระบบก่อน (ไปเรียก API ที่เราเพิ่งสร้างให้ Cloudflare)
-      const statusRes = await API.call('apiGetSystemStatus');
-      
-      if (statusRes && statusRes.success && statusRes.status === 'closed') {
-          showLoading(false);
-          // 🔴 ถ้าระบบปิด: ให้ซ่อนฟอร์ม แล้วโชว์ป้ายสีแดง
-          const formSec = document.getElementById('formSection');
-          const closeMsg = document.getElementById('closedSystemMessage');
-          if (formSec) formSec.classList.add('hidden');
-          if (closeMsg) closeMsg.classList.remove('hidden');
-          return; // หยุดการทำงาน ไม่ต้องโหลดรายชื่อ สปส. ต่อ
-      } else {
-          // 🟢 ถ้าระบบเปิด (หรือดึงข้อมูลไม่ได้ ให้ถือว่าเปิดไว้ก่อน): ให้โชว์ฟอร์ม ซ่อนป้ายสีแดง
-          const formSec = document.getElementById('formSection');
-          const closeMsg = document.getElementById('closedSystemMessage');
-          if (formSec) formSec.classList.remove('hidden');
-          if (closeMsg) closeMsg.classList.add('hidden');
-      }
-      
-      // 2. ถ้าระบบเปิด ให้โหลดข้อมูลหน่วยงาน สปส. มาแสดงใน Dropdown
-      showLoading(true, 'กำลังโหลดข้อมูลหน่วยงาน สปส....');
-      const res = await API.call('apiGetInitialData');
-      showLoading(false);
-      
-      if (res && res.success && res.data && res.data.branches) {
-          AppState.branches = res.data.branches;
-          populateBranchDropdown(res.data.branches);
-      } else {
-          showAlert('error', 'ไม่สามารถโหลดข้อมูลหน่วยงาน สปส. ได้');
-          console.error("Data error:", res);
-      }
-  } catch (err) {
-      showLoading(false);
-      // ถ้าเครือข่ายขัดข้อง ให้ดึงรายชื่อ สปส. ไม่ได้ แต่ยังคงแสดงฟอร์มไว้ก่อน (Fallback)
-      showAlert('error', 'ข้อผิดพลาดเครือข่าย: ' + err.message);
-  }
+    showLoading(true, 'กำลังเชื่อมต่อระบบส่วนกลาง...');
+    
+    try {
+        // 1. ตรวจสอบสถานะระบบก่อนเป็นอันดับแรก
+        const statusRes = await API.call('apiGetSystemStatus');
+        
+        // 🚨 กรณีระบบถูกตั้งเป็น "closed" (ปิดรับคำขอ)
+        if (statusRes && statusRes.success && statusRes.status === 'closed') {
+            showLoading(false);
+            
+            // ดึง Element ของฟอร์มและกล่องแจ้งเตือน
+            const formSection = document.getElementById('formSection');
+            const closedSystemMessage = document.getElementById('closedSystemMessage');
+            
+            if (formSection) {
+                formSection.classList.add('hidden'); // ซ่อนกล่องฟอร์มทั้งหมด
+            }
+            if (closedSystemMessage) {
+                closedSystemMessage.classList.remove('hidden'); // แสดงกล่องแจ้งเตือนสีแดง
+            }
+            
+            // ปิดไม่ให้กดปุ่ม "ยื่นแบบคำขอ" ด้านบนได้
+            const tabFormBtn = document.getElementById('tabForm');
+            if (tabFormBtn) {
+                tabFormBtn.disabled = true;
+                tabFormBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                tabFormBtn.onclick = null; // ยกเลิก event คลิก
+            }
+            
+            // สลับไปหน้า "ตรวจสอบสถานะ" ให้อัตโนมัติ (เพื่อไม่ให้หน้าจอโล่ง)
+            // เราหน่วงเวลาเล็กน้อยเพื่อให้ UI อัปเดตเสร็จก่อน
+            setTimeout(() => {
+                const searchReqId = document.getElementById('searchReqId');
+                // เช็คว่าถ้าไม่ใช่หน้าฟอร์ม ให้สลับแท็บ
+                if (!formSection || formSection.classList.contains('hidden')) {
+                     // โค้ดสำหรับแสดงผลป้ายปิดระบบ (จะยังคงแสดงอยู่ด้านบน)
+                }
+            }, 100);
+
+            return; // 🛑 หยุดการทำงานแค่นี้ ไม่ต้องไปโหลดรายชื่อ สปส. ต่อ
+        } 
+        
+        // 🟢 กรณีระบบ "open" (เปิดปกติ)
+        else {
+            const formSection = document.getElementById('formSection');
+            const closedSystemMessage = document.getElementById('closedSystemMessage');
+            
+            if (formSection) formSection.classList.remove('hidden'); // โชว์ฟอร์ม
+            if (closedSystemMessage) closedSystemMessage.classList.add('hidden'); // ซ่อนป้ายแดง
+            
+            const tabFormBtn = document.getElementById('tabForm');
+            if (tabFormBtn) {
+                tabFormBtn.disabled = false;
+                tabFormBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                tabFormBtn.onclick = () => switchTab('form'); // คืนค่า event คลิก
+            }
+        }
+        
+        // 2. ถ้าระบบเปิดอยู่ ให้โหลดข้อมูลหน่วยงาน สปส. มาใส่ Dropdown ตามปกติ
+        showLoading(true, 'กำลังโหลดข้อมูลหน่วยงาน สปส....');
+        const res = await API.call('apiGetInitialData');
+        showLoading(false);
+        
+        if (res && res.success && res.data && res.data.branches) {
+            AppState.branches = res.data.branches;
+            populateBranchDropdown(res.data.branches);
+        } else {
+            showAlert('error', 'ไม่สามารถโหลดข้อมูลหน่วยงาน สปส. ได้');
+            console.error("Data error:", res);
+        }
+    } catch (err) {
+        showLoading(false);
+        showAlert('error', 'ข้อผิดพลาดเครือข่าย: ' + err.message);
+    }
 }
 
 function populateBranchDropdown(branches) {
