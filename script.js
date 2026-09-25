@@ -18,18 +18,18 @@ const AppState = {
 
 const AppStateStatus = {
   rawCitizenId: '',
-  isPasswordVisible: false
+  isPasswordVisible: false,
+  retrievedPassword: '' // 🟢 เพิ่ม State สำหรับเก็บรหัสผ่านที่ดึงมา
 };
 
 let captchaAnswer = ''; 
-let isFetchingId = false; // ตัวแปรป้องกันระบบยิง API ซ้ำซ้อนขณะกำลังดึง Request ID
+let isFetchingId = false; 
 
 // ==========================================
 // 💡 ส่วนตั้งค่า API URL (Cloudflare Worker Backend)
 // ==========================================
 const API = {
   call: async function(action, payload = null) {
-      // 👇 นำ Web App URL ของคุณมาใส่ตรงนี้
       const WORKER_URL = 'https://sso-requests.new903900.workers.dev/'; 
       
       try {
@@ -60,7 +60,7 @@ const API = {
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
-  loadInitialReferenceData(); // โหลดรายชื่อ สปส. และเช็คสถานะปิด-เปิดเว็บ
+  loadInitialReferenceData(); 
   generateCaptcha(); 
 });
 
@@ -124,7 +124,6 @@ function initEventListeners() {
   const btnToggle = document.getElementById('btnTogglePassword');
   if(btnToggle) btnToggle.addEventListener('click', togglePasswordVisibility);
   
-  // ตั้งค่าระบบกู้คืน Request ID แบบ Auto-fetch
   setupForgotIdSystem();
   
   const btnClearStatusForm = document.getElementById('btnClearStatusForm');
@@ -143,7 +142,6 @@ function switchTab(tabName) {
   const searchResultArea = document.getElementById('searchResultArea');
   if (searchResultArea) searchResultArea.classList.add('hidden');
   
-  // เคลียร์ค่าในหน้าสถานะ
   const searchReqId = document.getElementById('searchReqId');
   const searchPhone = document.getElementById('searchPhone');
   const searchCaptcha = document.getElementById('searchCaptcha');
@@ -151,12 +149,12 @@ function switchTab(tabName) {
   if (searchPhone) searchPhone.value = '';
   if (searchCaptcha) searchCaptcha.value = '';
   
-  // เคลียร์ค่าใน Modal เผื่อไว้
   const lookupInput = document.getElementById('lookupCitizenId');
   const lookupPhone = document.getElementById('lookupPhone');
   if (lookupInput) { lookupInput.value = ''; lookupInput.dataset.raw = ''; }
   if (lookupPhone) lookupPhone.value = '';
   AppStateStatus.rawCitizenId = ''; 
+  AppStateStatus.retrievedPassword = ''; // 🟢 เคลียร์รหัสผ่านทุกครั้งที่สลับแท็บ
   
   const tabFormBtn = document.getElementById('tabForm');
   const tabStatusBtn = document.getElementById('tabStatus');
@@ -170,7 +168,6 @@ function switchTab(tabName) {
     sectionForm.classList.remove('hidden');
     sectionStatus.classList.add('hidden');
     
-    // ดักไว้เผื่อปุ่มโดน disable อยู่ตอนปิดเว็บ
     if (!tabFormBtn.disabled) {
        tabFormBtn.className = activeClass;
     }
@@ -222,14 +219,12 @@ function setupForgotIdSystem() {
     const checkAndFetchAuto = () => {
         if (typeof AppStateStatus === 'undefined') return; 
         
-        // เช็คว่าหน้าต่าง Modal กู้คืนรหัสเปิดอยู่หรือเปล่า (กันระบบแอบยิง API ตอนสลับหน้า)
         const isModalOpen = !document.getElementById('forgotIdModal').classList.contains('hidden');
         if (!isModalOpen) return;
         
         const rawId = AppStateStatus.rawCitizenId || '';
         const phone = lookupPhone ? lookupPhone.value.trim() : '';
         
-        // ถ้าบัตร 13 หลัก และเบอร์ 10 หลักครบ ให้ดึงข้อมูลอัตโนมัติ
         if (rawId.length === 13 && phone.length === 10 && !isFetchingId) {
             fetchRequestIdAuto();
         }
@@ -289,14 +284,12 @@ async function fetchRequestIdAuto() {
             
             showAlert('success', 'ดึงรหัสคำขอสำเร็จ! ระบบเติมข้อมูลในช่องค้นหาให้เรียบร้อยแล้ว กรุณายืนยันตัวตนเพื่อค้นหาข้อมูล');
             
-            // ล้างค่าใน Modal
             document.getElementById('lookupCitizenId').value = '';
             document.getElementById('lookupPhone').value = '';
             AppStateStatus.rawCitizenId = '';
             
         } else {
             showAlert('error', res.message || 'ไม่พบรหัสคำขอจากเลขประจำตัวและเบอร์โทรนี้');
-            // ถ้าไม่เจอ ให้เปิด Modal คืนมาให้ผู้ใช้พิมพ์ใหม่
             setTimeout(() => toggleModal('forgotIdModal', true), 500); 
         }
     } catch (err) {
@@ -315,10 +308,8 @@ async function loadInitialReferenceData() {
     showLoading(true, 'กำลังเชื่อมต่อระบบส่วนกลาง...');
     
     try {
-        // 1. ตรวจสอบสถานะระบบก่อนเป็นอันดับแรก
         const statusRes = await API.call('apiGetSystemStatus');
         
-        // 🚨 กรณีระบบถูกตั้งเป็น "closed" (ปิดรับคำขอ)
         if (statusRes && statusRes.success && statusRes.status === 'closed') {
             showLoading(false);
             
@@ -332,7 +323,6 @@ async function loadInitialReferenceData() {
                 closedSystemMessage.classList.remove('hidden'); 
             }
             
-            // ปิดไม่ให้กดปุ่ม "ยื่นแบบคำขอ" ด้านบนได้
             const tabFormBtn = document.getElementById('tabForm');
             if (tabFormBtn) {
                 tabFormBtn.disabled = true;
@@ -340,17 +330,15 @@ async function loadInitialReferenceData() {
                 tabFormBtn.onclick = null; 
             }
             
-            // สลับไปหน้า "ตรวจสอบสถานะ" ให้อัตโนมัติ (หน่วงเวลาให้ UI อัปเดตเสร็จ)
             setTimeout(() => {
                 if (!formSection || formSection.classList.contains('hidden')) {
                     switchTab('status'); 
                 }
             }, 100);
 
-            return; // 🛑 หยุดการทำงานแค่นี้ ไม่ต้องโหลดรายชื่อ สปส. ต่อ
+            return; 
         } 
         
-        // 🟢 กรณีระบบ "open" (เปิดปกติ)
         else {
             const formSection = document.getElementById('formSection');
             const closedSystemMessage = document.getElementById('closedSystemMessage');
@@ -366,7 +354,6 @@ async function loadInitialReferenceData() {
             }
         }
         
-        // 2. ถ้าระบบเปิดอยู่ ให้โหลดข้อมูลหน่วยงาน สปส. มาใส่ Dropdown ตามปกติ
         showLoading(true, 'กำลังโหลดข้อมูลหน่วยงาน สปส....');
         const res = await API.call('apiGetInitialData');
         showLoading(false);
@@ -558,12 +545,12 @@ function handleStatusSuccess(res) {
             const btnToggle = document.getElementById('btnTogglePassword');
             
             if (resPasswordEl) {
-                const rawPassword = d.password || '';
-                resPasswordEl.setAttribute('data-password', rawPassword);
+                // 🟢 เก็บ Password ไว้ใน AppStateStatus แทนการฝังใน DOM
+                AppStateStatus.retrievedPassword = d.password || ''; 
                 resPasswordEl.textContent = '••••••••';
                 AppStateStatus.isPasswordVisible = false;
                 
-                if (rawPassword) {
+                if (AppStateStatus.retrievedPassword) {
                     if(btnToggle) btnToggle.classList.remove('hidden'); 
                 } else {
                     if(btnToggle) btnToggle.classList.add('hidden'); 
@@ -657,7 +644,8 @@ function togglePasswordVisibility() {
   const resPasswordEl = document.getElementById('resPassword');
   if (!resPasswordEl) return;
   
-  const actualPassword = resPasswordEl.getAttribute('data-password');
+  // 🟢 ดึงรหัสผ่านจาก State แทนการดึงจาก DOM
+  const actualPassword = AppStateStatus.retrievedPassword;
   if (!actualPassword) return;
 
   AppStateStatus.isPasswordVisible = !AppStateStatus.isPasswordVisible; 
@@ -1050,9 +1038,10 @@ function clearStatusForm() {
 
     const lookupInput = document.getElementById('lookupCitizenId');
     const lookupPhone = document.getElementById('lookupPhone');
-    if (lookupInput) lookupInput.value = '';
+    if (lookupInput) { lookupInput.value = ''; lookupInput.dataset.raw = ''; }
     if (lookupPhone) lookupPhone.value = '';
     AppStateStatus.rawCitizenId = '';
+    AppStateStatus.retrievedPassword = '';
 
     generateCaptcha();
 }
