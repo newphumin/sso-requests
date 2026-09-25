@@ -485,21 +485,33 @@ function togglePasswordVisibility() {
 }
 
 // ==========================================
-// 7. โหลดข้อมูลเริ่มต้น (อ้างอิง)
+// ปรับปรุงฟังก์ชันโหลดข้อมูลเริ่มต้น ให้ดึงสถานะจาก Supabase ทันที
 // ==========================================
+
 async function loadInitialReferenceData() {
   showLoading(true, 'กำลังเชื่อมต่อระบบส่วนกลาง...');
   
   try {
+      // 1. ตรวจสอบสถานะระบบก่อน (ไปเรียก API ที่เราเพิ่งสร้างให้ Cloudflare)
       const statusRes = await API.call('apiGetSystemStatus');
       
       if (statusRes && statusRes.success && statusRes.status === 'closed') {
           showLoading(false);
-          document.getElementById('formSection').classList.add('hidden');
-          document.getElementById('closedSystemMessage').classList.remove('hidden');
-          return; 
-      } 
+          // 🔴 ถ้าระบบปิด: ให้ซ่อนฟอร์ม แล้วโชว์ป้ายสีแดง
+          const formSec = document.getElementById('formSection');
+          const closeMsg = document.getElementById('closedSystemMessage');
+          if (formSec) formSec.classList.add('hidden');
+          if (closeMsg) closeMsg.classList.remove('hidden');
+          return; // หยุดการทำงาน ไม่ต้องโหลดรายชื่อ สปส. ต่อ
+      } else {
+          // 🟢 ถ้าระบบเปิด (หรือดึงข้อมูลไม่ได้ ให้ถือว่าเปิดไว้ก่อน): ให้โชว์ฟอร์ม ซ่อนป้ายสีแดง
+          const formSec = document.getElementById('formSection');
+          const closeMsg = document.getElementById('closedSystemMessage');
+          if (formSec) formSec.classList.remove('hidden');
+          if (closeMsg) closeMsg.classList.add('hidden');
+      }
       
+      // 2. ถ้าระบบเปิด ให้โหลดข้อมูลหน่วยงาน สปส. มาแสดงใน Dropdown
       showLoading(true, 'กำลังโหลดข้อมูลหน่วยงาน สปส....');
       const res = await API.call('apiGetInitialData');
       showLoading(false);
@@ -509,9 +521,11 @@ async function loadInitialReferenceData() {
           populateBranchDropdown(res.data.branches);
       } else {
           showAlert('error', 'ไม่สามารถโหลดข้อมูลหน่วยงาน สปส. ได้');
+          console.error("Data error:", res);
       }
   } catch (err) {
       showLoading(false);
+      // ถ้าเครือข่ายขัดข้อง ให้ดึงรายชื่อ สปส. ไม่ได้ แต่ยังคงแสดงฟอร์มไว้ก่อน (Fallback)
       showAlert('error', 'ข้อผิดพลาดเครือข่าย: ' + err.message);
   }
 }
