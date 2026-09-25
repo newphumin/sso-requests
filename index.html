@@ -135,7 +135,7 @@
         <!-- ส่วนที่ 1: หน้าฟอร์มยื่นคำขอ -->
         <!-- ========================================== -->
         <div id="sectionForm">
-            <!-- ป้ายประกาศปิดระบบ -->
+            <!-- 🔴 ป้ายประกาศปิดระบบ (ย้ายออกมาอยู่นอก formSection เพื่อให้โชว์ได้เวลาฟอร์มโดนซ่อน) -->
             <div id="closedSystemMessage" class="hidden mb-8 bg-red-50 rounded-xl shadow-sm border-l-4 border-red-500 p-8 flex flex-col items-center justify-center text-center">
                 <div class="w-16 h-16 bg-white text-red-500 rounded-full flex items-center justify-center shadow-sm mb-4">
                     <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
@@ -146,6 +146,8 @@
                     <span class="block mt-2 font-medium text-red-900">หากมีข้อสงสัย กรุณาติดต่อ โทร. 02-956-2357, 56, 62</span>
                 </p>
             </div>
+
+            <!-- กล่องฟอร์มกรอกข้อมูล -->
             <div id="formSection" class="bg-white rounded-xl shadow-sm border border-govgray-200 overflow-hidden">
                 <div class="px-6 py-5 bg-govgray-50 border-b border-govgray-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <div>
