@@ -539,12 +539,15 @@ function setupCancelSystem() {
     }
 }
 
+// ==========================================
+// 🔴 ฟังก์ชันของแท็บ ขอยกเลิกการใช้งาน (อัปเดตแก้ Bug Null)
+// ==========================================
 async function searchCancelInfo() {
   hideAlert();
   const resArea = document.getElementById('cancelResultArea');
   if (resArea) resArea.classList.add('hidden');
   const successSec = document.getElementById('cancelSuccessSection');
-  if(successSec) successSec.classList.add('hidden');
+  if (successSec) successSec.classList.add('hidden');
   
   const citId = AppStateStatus.cancelRawCitizenId;
   const phone = document.getElementById('cancelPhone').value.trim();
@@ -566,28 +569,39 @@ async function searchCancelInfo() {
       
       if (res && res.success) {
           const d = res.data;
-          resArea.classList.remove('hidden');
+          if (resArea) resArea.classList.remove('hidden');
           
-          document.getElementById('cancelResReqId').textContent = d.requestId;
-          document.getElementById('cancelResCitizenId').textContent = maskCitizenIdForSearch(d.citizenId);
-          document.getElementById('cancelResName').textContent = `${maskNameText(d.firstname)} ${maskNameText(d.lastname)}`;
-          document.getElementById('cancelResEmail').textContent = maskEmailText(d.email);
-          document.getElementById('cancelResStation').textContent = d.stationDisplay;
+          // 💡 เทคนิค Fail-Safe: ตรวจสอบว่ามี Element ไหมก่อนยัดค่าใส่ ป้องกัน Error Null
+          const setSafeText = (id, text) => {
+              const el = document.getElementById(id);
+              if (el) el.textContent = text;
+          };
+
+          // อัปเดตข้อมูล (ถ้า ID ไหนคุณลบออกจาก HTML ไปแล้ว โค้ดก็จะไม่พัง)
+          setSafeText('cancelResReqId', d.requestId);
+          setSafeText('cancelResCitizenId', maskCitizenIdForSearch(d.citizenId)); // เผื่อคุณนำกลับมาใช้
+          setSafeText('cancelResName', `${maskNameText(d.firstname)} ${maskNameText(d.lastname)}`);
+          
+          // เพิ่มการแสดงผล ชื่อภาษาอังกฤษ (อิงตาม UI ใหม่ของคุณ)
+          setSafeText('cancelResNameEn', `${maskNameText(d.firstname_en)} ${maskNameText(d.lastname_en)}`);
+          
+          setSafeText('cancelResEmail', maskEmailText(d.email));
+          setSafeText('cancelResStation', d.stationDisplay);
           
           const statusEl = document.getElementById('cancelResStatus');
-          statusEl.textContent = d.status;
+          if (statusEl) statusEl.textContent = d.status;
           
           const actionBox = document.getElementById('cancelActionBox');
           const warningBox = document.getElementById('cancelWarningBox');
           
           if (d.status === 'ยกเลิก' || d.status === 'ยกเลิกสิทธิ์' || d.status === 'ไม่อนุมัติ') {
-              statusEl.className = "sm:col-span-2 font-bold text-red-600";
-              actionBox.classList.add('hidden');
-              warningBox.classList.remove('hidden');
+              if (statusEl) statusEl.className = "sm:col-span-2 font-bold text-red-600";
+              if (actionBox) actionBox.classList.add('hidden');
+              if (warningBox) warningBox.classList.remove('hidden');
           } else {
-              statusEl.className = "sm:col-span-2 font-bold text-emerald-600";
-              actionBox.classList.remove('hidden');
-              warningBox.classList.add('hidden');
+              if (statusEl) statusEl.className = "sm:col-span-2 font-bold text-emerald-600";
+              if (actionBox) actionBox.classList.remove('hidden');
+              if (warningBox) warningBox.classList.add('hidden');
               AppStateStatus.cancelRequestIdToSubmit = d.requestId;
           }
       } else {
