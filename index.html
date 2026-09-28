@@ -13,6 +13,7 @@
     <!-- Tailwind CSS CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -428,128 +429,138 @@
         </div>
 
         <!-- ========================================== -->
-        <!-- ส่วนที่ 3: หน้าขอยกเลิกการใช้งาน (เพิ่มใหม่) -->
-        <!-- ========================================== -->
-        <div id="sectionCancel" class="hidden">
-            <div class="bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden">
-                <div class="px-6 py-5 bg-red-50 border-b border-red-100 flex items-center space-x-3">
-                    <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-red-600 shadow-sm">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
-                    </div>
-                    <div>
-                        <h2 class="font-heading font-semibold text-lg text-red-800">ขอยกเลิกการใช้งาน</h2>
-                        <p class="text-sm text-red-600 mt-0.5">กรอกข้อมูลเพื่อค้นหาคำขอที่ต้องการยกเลิกสิทธิ์</p>
-                    </div>
-                </div>
-                
-                <div class="p-6 space-y-5">
-                    <p class="text-[14px] font-medium text-red-500 leading-relaxed bg-red-50/50 p-3 rounded-md border border-red-100">
-                        * กรุณากรอกข้อมูลให้ครบถ้วนเพื่อค้นหาคำขอของคุณ หากทำการยกเลิกแล้วสิทธิ์และรหัสผ่านจะถูกระงับทันที และไม่สามารถกู้คืนได้
-                    </p>
-
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                            <label class="block text-[15px] font-medium text-govgray-700 mb-1">เลขประจำตัวประชาชน 13 หลัก<span class="text-red-500"> *</span></label>
-                            <input type="text" id="cancelCitizenId" maxlength="17" placeholder="ระบุตัวเลข 13 หลัก" 
-                                   class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] focus:border-red-500 transition-colors">
-                        </div>
-                        <div>
-                            <label class="block text-[15px] font-medium text-govgray-700 mb-1">เบอร์โทรศัพท์ที่ใช้ลงทะเบียน<span class="text-red-500"> *</span></label>
-                            <input type="tel" id="cancelPhone" maxlength="10" placeholder="0812345678" 
-                                   class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] focus:border-red-500 transition-colors">
-                        </div>
-                    </div>
-                    
-                    <div class="bg-govgray-50 p-5 rounded-lg border border-govgray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
-                        <div class="flex items-center space-x-4">
-                            <div class="p-2.5 bg-govgray-200 rounded-md text-govgray-600">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
-                            </div>
-                            <div>
-                                <span class="block text-[15px] font-medium text-govgray-700">ยืนยันตัวตน (พิมพ์ข้อความที่เห็น)</span>
-                                <div class="mt-1.5 flex items-center gap-2">
-                                    <div class="bg-white px-5 py-2 border border-govgray-300 rounded-md font-mono text-xl font-bold text-red-600 tracking-[0.4em] shadow-inner select-none pointer-events-none" id="captchaDisplayCancel">
-                                        -
-                                    </div>
-                                    <!-- ปุ่มเปลี่ยน Captcha -->
-                                    <button type="button" onclick="generateCaptcha()" class="p-2 text-govgray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500" title="เปลี่ยนตัวอักษรใหม่">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        <input type="text" id="cancelCaptcha" maxlength="6" placeholder="กรอกข้อความ" autocomplete="off"
-                              class="w-full sm:w-48 px-4 py-3 bg-white border border-govgray-300 rounded-md text-govgray-900 text-center text-[16px] focus:border-red-500 transition-colors shadow-sm font-mono tracking-widest">
-                    </div>
-
-                    <div class="pt-5 flex flex-col-reverse sm:flex-row justify-end border-t border-govgray-100 gap-3">
-                        <button type="button" onclick="clearCancelForm()" class="w-full sm:w-auto px-6 py-2.5 bg-white hover:bg-govgray-100 border border-govgray-300 text-govgray-700 font-medium text-[15px] rounded-md shadow-sm transition-colors flex items-center justify-center space-x-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
-                            <span>ล้างข้อมูล</span>
-                        </button>
-                        
-                        <button type="button" onclick="searchCancelInfo()" class="w-full sm:w-auto px-8 py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium text-[15px] rounded-md shadow-sm transition-colors flex items-center justify-center space-x-2">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                            <span>ค้นหาข้อมูล</span>
-                        </button>
-                    </div>
-                </div>
+<!-- ส่วนที่ 3: หน้าขอยกเลิกการใช้งาน (แท็บที่ 4) -->
+<!-- ========================================== -->
+<div id="sectionCancel" class="hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-red-200 overflow-hidden">
+        <div class="px-6 py-5 bg-red-50 border-b border-red-100 flex items-center space-x-3">
+            <div class="w-10 h-10 bg-white rounded-full flex items-center justify-center text-red-600 shadow-sm">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
             </div>
-
-            <!-- แสดงข้อมูลพรางก่อนกดยกเลิก -->
-            <div id="cancelResultArea" class="hidden mt-6 bg-white rounded-xl shadow-sm border border-govgray-200 overflow-hidden">
-                <div class="bg-govgray-50 px-6 py-4 border-b border-govgray-200 flex items-center space-x-3">
-                    <div class="w-8 h-8 bg-govblue-100 rounded-full flex items-center justify-center text-govblue-600 shadow-sm">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-                    </div>
-                    <h3 class="font-heading font-semibold text-govblue-900 text-lg">ข้อมูลคำขอของคุณ</h3>
-                </div>
-                <div class="p-6 text-[15px]">
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
-                        <span class="sm:col-span-1 text-govgray-500 font-medium">สถานะคำขอ</span>
-                        <span class="sm:col-span-2 font-bold text-govblue-700" id="cancelResStatus">-</span>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
-                        <span class="sm:col-span-1 text-govgray-500 font-medium">รหัสคำขอ (Request ID)</span>
-                        <span class="sm:col-span-2 font-mono font-bold text-govgray-800 tracking-wider" id="cancelResReqId">-</span>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
-                        <span class="sm:col-span-1 text-govgray-500 font-medium">ชื่อ - นามสกุล</span>
-                        <span class="sm:col-span-2 text-govgray-800" id="cancelResName">-</span>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
-                        <span class="sm:col-span-1 text-govgray-500 font-medium">ชื่อ - นามสกุล (EN)</span>
-                        <span class="sm:col-span-2 text-govgray-800" id="cancelResNameEn">-</span>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
-                        <span class="sm:col-span-1 text-govgray-500 font-medium">อีเมล</span>
-                        <span class="sm:col-span-2 text-govgray-800" id="cancelResEmail">-</span>
-                    </div>
-                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 py-3">
-                        <span class="sm:col-span-1 text-govgray-500 font-medium">สถานที่เลือกตั้ง</span>
-                        <span class="sm:col-span-2 text-govgray-800" id="cancelResStation">-</span>
-                    </div>
-                </div>
-                
-                <div class="px-6 py-5 bg-red-50 border-t border-red-100 flex flex-col items-center justify-center text-center">
-                    <p class="text-sm text-red-600 mb-4 font-medium">หากกดยกเลิกการใช้งาน รหัสผ่านปัจจุบันจะถูกระงับทันที</p>
-                    <button type="button" onclick="confirmCancellation()" class="w-full sm:w-auto px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-[16px] rounded-lg shadow-md transition-all flex items-center justify-center space-x-2">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                        <span>ขอยกเลิกการใช้งาน</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- หน้าจอสำเร็จหลังกดยกเลิก -->
-            <div id="cancelSuccessArea" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 overflow-hidden text-center p-8 sm:p-12 mt-6">
-                <div class="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-emerald-100">
-                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
-                </div>
-                <h2 class="font-heading text-2xl font-semibold text-emerald-700 mb-2">ยกเลิกการใช้งานสำเร็จ</h2>
-                <p class="text-[15px] text-govgray-600 mb-6">ระบบได้ทำการระงับคำขอและสิทธิ์การเข้าใช้งานของคุณเรียบร้อยแล้ว</p>
-                <button type="button" onclick="switchTab('form')" class="px-8 py-2.5 bg-govblue-800 hover:bg-govblue-900 text-white text-[15px] font-medium rounded-md shadow-sm transition">กลับหน้ายื่นคำขอใหม่</button>
+            <div>
+                <h2 class="font-heading font-semibold text-lg text-red-800">ขอยกเลิกการใช้งาน</h2>
+                <p class="text-sm text-red-600 mt-0.5">กรอกข้อมูลเพื่อค้นหาคำขอที่ต้องการยกเลิกสิทธิ์</p>
             </div>
         </div>
+        
+        <div class="p-6 space-y-5">
+            <!-- 💡 อัปเดตกล่องแจ้งเตือนเป็นสีเหลืองส้ม (Amber) ตามที่ขอครับ -->
+            <div class="bg-amber-50 p-4 rounded-lg border border-amber-200 flex items-start gap-3">
+                <svg class="w-5 h-5 text-amber-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <p class="text-[14px] text-amber-800 leading-relaxed font-medium">
+                    * กรุณากรอกข้อมูลให้ครบถ้วนเพื่อค้นหาคำขอของคุณ หากทำการยกเลิกแล้วสิทธิ์และรหัสผ่านจะถูกระงับทันที และไม่สามารถกู้คืนได้
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div>
+                    <label class="block text-[15px] font-medium text-govgray-700 mb-1">เลขประจำตัวประชาชน 13 หลัก<span class="text-red-500"> *</span></label>
+                    <input type="text" id="cancelCitizenId" maxlength="17" placeholder="ระบุตัวเลข 13 หลัก" 
+                           class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] focus:border-red-500 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-[15px] font-medium text-govgray-700 mb-1">เบอร์โทรศัพท์ที่ใช้ลงทะเบียน<span class="text-red-500"> *</span></label>
+                    <input type="tel" id="cancelPhone" maxlength="10" placeholder="0812345678" 
+                           class="w-full px-4 py-2.5 bg-white border border-govgray-300 rounded-md text-govgray-900 text-[15px] focus:border-red-500 transition-colors">
+                </div>
+            </div>
+            
+            <div class="bg-govgray-50 p-5 rounded-lg border border-govgray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-5">
+                <div class="flex items-center space-x-4">
+                    <div class="p-2.5 bg-govgray-200 rounded-md text-govgray-600">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
+                    </div>
+                    <div>
+                        <span class="block text-[15px] font-medium text-govgray-700">ยืนยันตัวตน (พิมพ์ข้อความที่เห็น)</span>
+                        <div class="mt-1.5 flex items-center gap-2">
+                            <div class="bg-white px-5 py-2 border border-govgray-300 rounded-md font-mono text-xl font-bold text-red-600 tracking-[0.4em] shadow-inner select-none pointer-events-none" id="captchaDisplayCancel">
+                                -
+                            </div>
+                            <!-- ปุ่มเปลี่ยน Captcha -->
+                            <button type="button" onclick="generateCaptcha()" class="p-2 text-govgray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-red-500" title="เปลี่ยนตัวอักษรใหม่">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <input type="text" id="cancelCaptcha" maxlength="6" placeholder="กรอกข้อความ" autocomplete="off"
+                      class="w-full sm:w-48 px-4 py-3 bg-white border border-govgray-300 rounded-md text-govgray-900 text-center text-[16px] focus:border-red-500 transition-colors shadow-sm font-mono tracking-widest">
+            </div>
+
+            <div class="pt-5 flex flex-col-reverse sm:flex-row justify-end border-t border-govgray-100 gap-3">
+                <button type="button" onclick="clearCancelForm()" class="w-full sm:w-auto px-6 py-2.5 bg-white hover:bg-govgray-100 border border-govgray-300 text-govgray-700 font-medium text-[15px] rounded-md shadow-sm transition-colors flex items-center justify-center space-x-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    <span>ล้างข้อมูล</span>
+                </button>
+                
+                <button type="button" onclick="searchCancelInfo()" class="w-full sm:w-auto px-8 py-2.5 bg-red-600 hover:bg-red-700 text-white font-medium text-[15px] rounded-md shadow-sm transition-colors flex items-center justify-center space-x-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <span>ค้นหาข้อมูล</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 💡 แก้ไข ID ให้ตรงกับ script.js: cancelResultArea -->
+    <div id="cancelResultArea" class="hidden mt-6 bg-white rounded-xl shadow-sm border border-govgray-200 overflow-hidden">
+        <div class="bg-govgray-50 px-6 py-4 border-b border-govgray-200 flex items-center space-x-3">
+            <div class="w-8 h-8 bg-govblue-100 rounded-full flex items-center justify-center text-govblue-600 shadow-sm">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+            </div>
+            <h3 class="font-heading font-semibold text-govblue-900 text-lg">ข้อมูลคำขอของคุณ</h3>
+        </div>
+        <div class="p-6 text-[15px]">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                <span class="sm:col-span-1 text-govgray-500 font-medium">สถานะคำขอ</span>
+                <span class="sm:col-span-2 font-bold text-govblue-700" id="cancelResStatus">-</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                <span class="sm:col-span-1 text-govgray-500 font-medium">รหัสคำขอ (Request ID)</span>
+                <span class="sm:col-span-2 font-mono font-bold text-govgray-800 tracking-wider" id="cancelResReqId">-</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                <span class="sm:col-span-1 text-govgray-500 font-medium">ชื่อ - นามสกุล</span>
+                <span class="sm:col-span-2 text-govgray-800" id="cancelResName">-</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                <span class="sm:col-span-1 text-govgray-500 font-medium">ชื่อ - นามสกุล (EN)</span>
+                <span class="sm:col-span-2 text-govgray-800" id="cancelResNameEn">-</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 border-b border-govgray-100 py-3">
+                <span class="sm:col-span-1 text-govgray-500 font-medium">อีเมล</span>
+                <span class="sm:col-span-2 text-govgray-800" id="cancelResEmail">-</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-y-3 sm:gap-y-0 py-3">
+                <span class="sm:col-span-1 text-govgray-500 font-medium">สถานที่เลือกตั้ง</span>
+                <span class="sm:col-span-2 text-govgray-800" id="cancelResStation">-</span>
+            </div>
+            
+            <!-- 💡 เพิ่ม ID กล่องแจ้งเตือนกรณียกเลิกไม่ได้ ให้ตรงกับ script.js -->
+            <div id="cancelWarningBox" class="hidden mt-6 bg-amber-50 p-4 rounded-lg border border-amber-200 text-amber-800 text-center text-sm font-medium">
+                คำขอนี้ถูกระงับสิทธิ์หรือถูกปฏิเสธโดยเจ้าหน้าที่ไปแล้ว
+            </div>
+        </div>
+        
+        <!-- 💡 เพิ่ม ID actionBox เพื่อให้ script.js สั่งเปิด/ปิดได้ -->
+        <div id="cancelActionBox" class="px-6 py-5 bg-red-50 border-t border-red-100 flex flex-col items-center justify-center text-center">
+            <p class="text-sm text-red-600 mb-4 font-medium">หากกดยกเลิกการใช้งาน รหัสผ่านปัจจุบันจะถูกระงับทันที</p>
+            <button type="button" onclick="confirmCancellation()" class="w-full sm:w-auto px-8 py-3 bg-red-600 hover:bg-red-700 text-white font-bold text-[16px] rounded-lg shadow-md transition-all flex items-center justify-center space-x-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <span>ขอยกเลิกการใช้งาน</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- 💡 แก้ไข ID ให้ตรงกับ script.js: cancelSuccessSection -->
+    <div id="cancelSuccessSection" class="hidden bg-white rounded-xl shadow-sm border border-emerald-200 overflow-hidden text-center p-8 sm:p-12 mt-6">
+        <div class="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-5 border-4 border-emerald-100">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+        </div>
+        <h2 class="font-heading text-2xl font-semibold text-emerald-700 mb-2">ยกเลิกการใช้งานสำเร็จ</h2>
+        <p class="text-[15px] text-govgray-600 mb-6">ระบบได้ทำการระงับคำขอและสิทธิ์การเข้าใช้งานของคุณเรียบร้อยแล้ว</p>
+        <button type="button" onclick="switchTab('form')" class="px-8 py-2.5 bg-govblue-800 hover:bg-govblue-900 text-white text-[15px] font-medium rounded-md shadow-sm transition">กลับหน้ายื่นคำขอใหม่</button>
+    </div>
+</div>
 
         <!-- Loading Overlay Modal -->
         <div id="loadingOverlay" class="hidden fixed inset-0 z-[60] bg-govgray-900/60 backdrop-blur-sm flex flex-col items-center justify-center p-4">
