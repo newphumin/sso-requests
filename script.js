@@ -613,6 +613,9 @@ async function searchCancelInfo() {
   }
 }
 
+// ==========================================
+// ฟังก์ชันยืนยันการยกเลิก (แก้ Bug Payload Mismatch แล้ว)
+// ==========================================
 function confirmCancellation() {
   const reqId = AppStateStatus.cancelRequestIdToSubmit;
   const phone = document.getElementById('cancelPhone').value.trim();
@@ -633,7 +636,9 @@ function confirmCancellation() {
       if (result.isConfirmed) {
           showLoading(true, 'กำลังดำเนินการยกเลิกสิทธิ์...');
           try {
-              const res = await API.call('apiSubmitCancel', { citizenId: citId, phone: phone });
+              // 💡 จุดที่แก้ไข: เปลี่ยนจาก citizenId เป็น requestId ให้ตรงกับที่ Worker ต้องการ
+              const res = await API.call('apiSubmitCancel', { requestId: reqId, phone: phone });
+              
               showLoading(false);
               if (res && res.success) {
                   document.getElementById('cancelResultArea').classList.add('hidden');
