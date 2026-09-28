@@ -1,7 +1,6 @@
 /**
  * Frontend Application Controller (script.js)
- * รวมระบบยื่นคำขอ และ ระบบตรวจสอบสถานะ
- * อัปเกรดเพื่อรองรับการทำงานแยกส่วน (Frontend/Backend) บน Cloudflare
+ * รวมระบบยื่นคำขอ ระบบตรวจสอบสถานะ และระบบขอยกเลิกการใช้งาน
  */
 
 // ==========================================
@@ -12,51 +11,42 @@ const AppState = {
   stationsCache: new Map(), 
   selectedFiles: [], 
   isSubmitting: false,
-  isPasswordVisible: false,
-  rawCitizenId: '' 
 };
 
 const AppStateStatus = {
   rawCitizenId: '',
   isPasswordVisible: false,
-  retrievedPassword: '' // 🟢 เพิ่ม State สำหรับเก็บรหัสผ่านที่ดึงมา
+  retrievedPassword: '',
+  cancelRawCitizenId: '',
+  cancelRequestIdToSubmit: ''
 };
 
 let captchaAnswer = ''; 
 let isFetchingId = false; 
 
 // ==========================================
-// 💡 ส่วนตั้งค่า API URL (Cloudflare Worker Backend)
+// 💡 2. API Configuration
 // ==========================================
 const API = {
   call: async function(action, payload = null) {
+      // 👇 เปลี่ยนเป็น Worker URL ของคุณ
       const WORKER_URL = 'https://sso-requests.new903900.workers.dev/'; 
-      
       try {
           const response = await fetch(WORKER_URL, {
               method: 'POST',
-              headers: {
-                  'Content-Type': 'application/json',
-              },
+              headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ action: action, payload: payload })
           });
-          
-          if (!response.ok) {
-              throw new Error(`HTTP Error: ${response.status}`);
-          }
-
-          const result = await response.json();
-          return result;
-          
+          if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+          return await response.json();
       } catch (error) {
-          console.error("API Error [Action: " + action + "]:", error);
           throw new Error("การเชื่อมต่อเซิร์ฟเวอร์ขัดข้อง กรุณาตรวจสอบ Network");
       }
   }
 };
 
 // ==========================================
-// 2. การกำหนดค่าเริ่มต้น
+// 3. Initialization & Event Listeners
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
@@ -74,26 +64,28 @@ function initEventListeners() {
   const btnConfirmSubmit = document.getElementById('btnConfirmSubmit');
   const btnCopyRequestId = document.getElementById('btnCopyRequestId');
   const btnResetForm = document.getElementById('btnResetForm');
+  
   const citizenInput = document.getElementById('citizenId');
   const phoneInput = document.getElementById('phone');
+  const searchPhoneInput = document.getElementById('searchPhone');
+  const cancelPhoneInput = document.getElementById('cancelPhone');
   
-  const userRequestForm = document.getElementById('userRequestForm');
-  if(userRequestForm) userRequestForm.addEventListener('submit', (e) => e.preventDefault());
-  
+  if(citizenInput) citizenInput.addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
+  if(phoneInput) phoneInput.addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
+  if(searchPhoneInput) searchPhoneInput.addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
+  if(cancelPhoneInput) cancelPhoneInput.addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
+
+  const searchCaptchaInput = document.getElementById('searchCaptcha');
+  const cancelCaptchaInput = document.getElementById('cancelCaptcha');
+  const enforceLowercase = (e) => { e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''); };
+  if(searchCaptchaInput) searchCaptchaInput.addEventListener('input', enforceLowercase);
+  if(cancelCaptchaInput) cancelCaptchaInput.addEventListener('input', enforceLowercase);
+
   const fNameEnInput = document.getElementById('firstnameEn');
   const lNameEnInput = document.getElementById('lastnameEn');
   const enforceLowercaseEng = (e) => { e.target.value = e.target.value.toLowerCase().replace(/[^a-z\s]/g, ''); };
   if(fNameEnInput) fNameEnInput.addEventListener('input', enforceLowercaseEng);
   if(lNameEnInput) lNameEnInput.addEventListener('input', enforceLowercaseEng);
-
-  if(citizenInput) citizenInput.addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
-  if(phoneInput) phoneInput.addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
-  
-  const searchPhoneInput = document.getElementById('searchPhone');
-  if(searchPhoneInput) searchPhoneInput.addEventListener('input', (e) => e.target.value = e.target.value.replace(/\D/g, ''));
-
-  const searchCaptchaInput = document.getElementById('searchCaptcha');
-  if(searchCaptchaInput) searchCaptchaInput.addEventListener('input', (e) => e.target.value = e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
   if(ssoSelect) ssoSelect.addEventListener('change', (e) => handleBranchChange(e.target.value));
   if(stationSelect) stationSelect.addEventListener('change', (e) => handleStationChange(e.target.value));
@@ -104,14 +96,10 @@ function initEventListeners() {
   const uploadZone = document.querySelector('.upload-zone');
   if (uploadZone) {
       ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-          uploadZone.addEventListener(eventName, preventDefaults, false);
+          uploadZone.addEventListener(eventName, (e) => { e.preventDefault(); e.stopPropagation(); }, false);
       });
-      ['dragenter', 'dragover'].forEach(eventName => {
-          uploadZone.addEventListener(eventName, () => uploadZone.classList.add('border-govblue-500', 'bg-govblue-50'), false);
-      });
-      ['dragleave', 'drop'].forEach(eventName => {
-          uploadZone.addEventListener(eventName, () => uploadZone.classList.remove('border-govblue-500', 'bg-govblue-50'), false);
-      });
+      ['dragenter', 'dragover'].forEach(eventName => uploadZone.addEventListener(eventName, () => uploadZone.classList.add('border-govblue-500', 'bg-govblue-50'), false));
+      ['dragleave', 'drop'].forEach(eventName => uploadZone.addEventListener(eventName, () => uploadZone.classList.remove('border-govblue-500', 'bg-govblue-50'), false));
       uploadZone.addEventListener('drop', handleDrop, false);
   }
 
@@ -125,74 +113,65 @@ function initEventListeners() {
   if(btnToggle) btnToggle.addEventListener('click', togglePasswordVisibility);
   
   setupForgotIdSystem();
-  
-  const btnClearStatusForm = document.getElementById('btnClearStatusForm');
-  if (btnClearStatusForm) {
-      btnClearStatusForm.addEventListener('click', clearStatusForm);
-  }
+  setupCancelSystem();
 }
 
-function preventDefaults(e) { e.preventDefault(); e.stopPropagation(); }
-
 // ==========================================
-// 3. ระบบ TABS และ CAPTCHA
+// 4. ระบบ TABS และ CAPTCHA
 // ==========================================
 function switchTab(tabName) {
   hideAlert();
+  
+  // Clear Status
   const searchResultArea = document.getElementById('searchResultArea');
   if (searchResultArea) searchResultArea.classList.add('hidden');
+  if (document.getElementById('searchReqId')) document.getElementById('searchReqId').value = '';
+  if (document.getElementById('searchPhone')) document.getElementById('searchPhone').value = '';
+  if (document.getElementById('searchCaptcha')) document.getElementById('searchCaptcha').value = '';
   
-  const searchReqId = document.getElementById('searchReqId');
-  const searchPhone = document.getElementById('searchPhone');
-  const searchCaptcha = document.getElementById('searchCaptcha');
-  if (searchReqId) searchReqId.value = '';
-  if (searchPhone) searchPhone.value = '';
-  if (searchCaptcha) searchCaptcha.value = '';
-  
+  // Clear Forgot ID
   const lookupInput = document.getElementById('lookupCitizenId');
-  const lookupPhone = document.getElementById('lookupPhone');
   if (lookupInput) { lookupInput.value = ''; lookupInput.dataset.raw = ''; }
-  if (lookupPhone) lookupPhone.value = '';
+  if (document.getElementById('lookupPhone')) document.getElementById('lookupPhone').value = '';
   AppStateStatus.rawCitizenId = ''; 
-  AppStateStatus.retrievedPassword = ''; // 🟢 เคลียร์รหัสผ่านทุกครั้งที่สลับแท็บ
+  AppStateStatus.retrievedPassword = '';
   
-  const tabFormBtn = document.getElementById('tabForm');
-  const tabStatusBtn = document.getElementById('tabStatus');
-  const sectionForm = document.getElementById('sectionForm');
-  const sectionStatus = document.getElementById('sectionStatus');
+  // Clear Cancel
+  clearCancelForm();
+  
+  const sections = ['sectionForm', 'sectionStatus', 'sectionCancel'];
+  const tabs = ['tabForm', 'tabStatus', 'tabCancel'];
+  
+  sections.forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+  
+  const activeClass = "py-3 text-[14px] sm:text-[15px] font-heading font-semibold rounded-md bg-white text-govblue-900 shadow-sm transition-all flex justify-center items-center gap-1 sm:gap-2";
+  const inactiveClass = "py-3 text-[14px] sm:text-[15px] font-heading font-semibold rounded-md text-govgray-600 hover:text-govblue-800 hover:bg-white/50 transition-all flex justify-center items-center gap-1 sm:gap-2";
+  const cancelInactiveClass = "py-3 text-[14px] sm:text-[15px] font-heading font-semibold rounded-md text-govgray-600 hover:text-red-600 hover:bg-white/50 transition-all flex justify-center items-center gap-1 sm:gap-2";
 
-  const activeClass = "flex-1 py-3 text-[14px] sm:text-[15px] font-heading font-semibold rounded-md bg-white text-govblue-900 shadow-sm transition-all flex justify-center items-center gap-1 sm:gap-2";
-  const inactiveClass = "flex-1 py-3 text-[14px] sm:text-[15px] font-heading font-semibold rounded-md text-govgray-600 hover:text-govblue-800 hover:bg-white/50 transition-all flex justify-center items-center gap-1 sm:gap-2";
+  tabs.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && !el.disabled) {
+          el.className = (id === 'tabCancel') ? cancelInactiveClass : inactiveClass;
+      }
+  });
 
-  if (tabName === 'form') {
-    sectionForm.classList.remove('hidden');
-    sectionStatus.classList.add('hidden');
-    
-    if (!tabFormBtn.disabled) {
-       tabFormBtn.className = activeClass;
-    }
-    tabStatusBtn.className = inactiveClass;
-  } else {
-    sectionForm.classList.add('hidden');
-    sectionStatus.classList.remove('hidden');
-    tabStatusBtn.className = activeClass;
-    
-    if (!tabFormBtn.disabled) {
-      tabFormBtn.className = inactiveClass;
-    }
-    
-    generateCaptcha(); 
+  const activeSection = document.getElementById(tabName === 'form' ? 'sectionForm' : tabName === 'status' ? 'sectionStatus' : 'sectionCancel');
+  if (activeSection) activeSection.classList.remove('hidden');
+
+  const activeTab = document.getElementById('tab' + tabName.charAt(0).toUpperCase() + tabName.slice(1));
+  if (activeTab && !activeTab.disabled) {
+      activeTab.className = activeClass;
+      if (tabName === 'cancel') activeTab.classList.add('text-red-700'); 
   }
+
+  generateCaptcha(); 
 }
 
 function generateCaptcha() {
   const letters = 'abcdefghijklmnopqrstuvwxyz';
   const numbers = '0123456789';
   let charArray = [];
-
-  for (let i = 0; i < 5; i++) {
-    charArray.push(letters.charAt(Math.floor(Math.random() * letters.length)));
-  }
+  for (let i = 0; i < 5; i++) charArray.push(letters.charAt(Math.floor(Math.random() * letters.length)));
   charArray.push(numbers.charAt(Math.floor(Math.random() * numbers.length)));
 
   for (let i = charArray.length - 1; i > 0; i--) {
@@ -203,77 +182,51 @@ function generateCaptcha() {
   captchaAnswer = charArray.join('');
   const displayFormat = charArray.join(' '); 
 
-  const display = document.getElementById('captchaDisplay');
-  const input = document.getElementById('searchCaptcha');
-  if(display) display.textContent = displayFormat;
-  if(input) input.value = '';
+  const displays = ['captchaDisplayStatus', 'captchaDisplayCancel'];
+  const inputs = ['searchCaptcha', 'cancelCaptcha'];
+  
+  displays.forEach(id => { const el = document.getElementById(id); if (el) el.textContent = displayFormat; });
+  inputs.forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
 }
 
 // ==========================================
-// 4. ระบบกู้คืนรหัสคำขอ (Modal & Auto-fetch)
+// 5. ระบบกู้คืนรหัสคำขอ & Masking
 // ==========================================
 function setupForgotIdSystem() {
     const lookupInput = document.getElementById('lookupCitizenId');
-    const lookupPhone = document.getElementById('lookupPhone');
-
-    const checkAndFetchAuto = () => {
-        if (typeof AppStateStatus === 'undefined') return; 
-        
-        const isModalOpen = !document.getElementById('forgotIdModal').classList.contains('hidden');
-        if (!isModalOpen) return;
-        
-        const rawId = AppStateStatus.rawCitizenId || '';
-        const phone = lookupPhone ? lookupPhone.value.trim() : '';
-        
-        if (rawId.length === 13 && phone.length === 10 && !isFetchingId) {
-            fetchRequestIdAuto();
-        }
-    };
-
     if (lookupInput) {
         lookupInput.addEventListener('input', function(e) {
             AppStateStatus.rawCitizenId = e.target.value.replace(/\D/g, '').substring(0, 13);
             e.target.value = AppStateStatus.rawCitizenId;
             checkAndFetchAuto(); 
         });
-        lookupInput.addEventListener('change', checkAndFetchAuto);
-
         lookupInput.addEventListener('blur', function(e) {
-            if (AppStateStatus.rawCitizenId && AppStateStatus.rawCitizenId.length === 13) {
-                e.target.value = `${AppStateStatus.rawCitizenId[0]}-xxxx-xxxxx-xx-${AppStateStatus.rawCitizenId[12]}`;
-            }
+            if (AppStateStatus.rawCitizenId.length === 13) e.target.value = maskCitizenIdForSearch(AppStateStatus.rawCitizenId);
         });
-
         lookupInput.addEventListener('focus', function(e) {
-            if (AppStateStatus.rawCitizenId) {
-                e.target.value = AppStateStatus.rawCitizenId;
-            }
+            if (AppStateStatus.rawCitizenId) e.target.value = AppStateStatus.rawCitizenId;
         });
     }
-    
-    if (lookupPhone) {
-        lookupPhone.addEventListener('input', (e) => {
-            e.target.value = e.target.value.replace(/\D/g, '').substring(0, 10);
-            checkAndFetchAuto(); 
-        });
-        lookupPhone.addEventListener('change', checkAndFetchAuto);
-    }
+    const lookupPhone = document.getElementById('lookupPhone');
+    if (lookupPhone) lookupPhone.addEventListener('input', (e) => { e.target.value = e.target.value.replace(/\D/g, '').substring(0, 10); checkAndFetchAuto(); });
 }
+
+const checkAndFetchAuto = () => {
+    const isModalOpen = !document.getElementById('forgotIdModal').classList.contains('hidden');
+    if (!isModalOpen) return;
+    const phone = document.getElementById('lookupPhone') ? document.getElementById('lookupPhone').value.trim() : '';
+    if (AppStateStatus.rawCitizenId.length === 13 && phone.length === 10 && !isFetchingId) fetchRequestIdAuto();
+};
 
 async function fetchRequestIdAuto() {
     if (isFetchingId) return;
     isFetchingId = true; 
-
     try {
         const phoneInput = document.getElementById('lookupPhone').value.trim();
-        const rawId = AppStateStatus.rawCitizenId;
-
         hideAlert();
         toggleModal('forgotIdModal', false); 
         showLoading(true, 'กำลังดึงรหัสคำขออัตโนมัติ...');
-
-        const res = await API.call('apiFindRequestId', { citizenId: rawId, phone: phoneInput });
-        
+        const res = await API.call('apiFindRequestId', { citizenId: AppStateStatus.rawCitizenId, phone: phoneInput });
         showLoading(false);
         isFetchingId = false; 
 
@@ -281,72 +234,46 @@ async function fetchRequestIdAuto() {
             switchTab('status'); 
             document.getElementById('searchReqId').value = res.requestId;
             document.getElementById('searchPhone').value = phoneInput; 
-            
-            showAlert('success', 'ดึงรหัสคำขอสำเร็จ! ระบบเติมข้อมูลในช่องค้นหาให้เรียบร้อยแล้ว กรุณายืนยันตัวตนเพื่อค้นหาข้อมูล');
-            
-            document.getElementById('lookupCitizenId').value = '';
-            document.getElementById('lookupPhone').value = '';
-            AppStateStatus.rawCitizenId = '';
-            
+            showAlert('success', 'ดึงรหัสคำขอสำเร็จ! ระบบเติมข้อมูลในช่องค้นหาให้เรียบร้อยแล้ว');
         } else {
-            showAlert('error', res.message || 'ไม่พบรหัสคำขอจากเลขประจำตัวและเบอร์โทรนี้');
+            showAlert('error', res.message || 'ไม่พบรหัสคำขอจากข้อมูลนี้');
             setTimeout(() => toggleModal('forgotIdModal', true), 500); 
         }
     } catch (err) {
-        isFetchingId = false; 
-        showLoading(false);
-        showAlert('error', 'เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message);
+        isFetchingId = false; showLoading(false); showAlert('error', 'ระบบขัดข้อง: ' + err.message);
     }
 }
 
-
 // ==========================================
-// 5.ปรับปรุงฟังก์ชันโหลดข้อมูลเริ่มต้น (เช็คสถานะปิดระบบ)
+// 6. โหลดข้อมูลเริ่มต้น (ระบบเปิด-ปิด)
 // ==========================================
-
 async function loadInitialReferenceData() {
     showLoading(true, 'กำลังเชื่อมต่อระบบส่วนกลาง...');
-    
     try {
         const statusRes = await API.call('apiGetSystemStatus');
-        
+        const formSection = document.getElementById('formSection');
+        const closedSystemMessage = document.getElementById('closedSystemMessage');
+        const tabFormBtn = document.getElementById('tabForm');
+
         if (statusRes && statusRes.success && statusRes.status === 'closed') {
             showLoading(false);
-            
-            const formSection = document.getElementById('formSection');
-            const closedSystemMessage = document.getElementById('closedSystemMessage');
-            
-            if (formSection) {
-                formSection.classList.add('hidden'); 
-            }
-            if (closedSystemMessage) {
-                closedSystemMessage.classList.remove('hidden'); 
-            }
-            
-            const tabFormBtn = document.getElementById('tabForm');
+            if (formSection) formSection.classList.add('hidden'); 
+            if (closedSystemMessage) closedSystemMessage.classList.remove('hidden'); 
             if (tabFormBtn) {
                 tabFormBtn.disabled = true;
                 tabFormBtn.classList.add('opacity-50', 'cursor-not-allowed');
                 tabFormBtn.onclick = null; 
             }
-            
             setTimeout(() => {
-                if (!formSection || formSection.classList.contains('hidden')) {
+                const currentSec = document.getElementById('sectionForm');
+                if (currentSec && !currentSec.classList.contains('hidden') && (!formSection || formSection.classList.contains('hidden'))) {
                     switchTab('status'); 
                 }
             }, 100);
-
             return; 
-        } 
-        
-        else {
-            const formSection = document.getElementById('formSection');
-            const closedSystemMessage = document.getElementById('closedSystemMessage');
-            
+        } else {
             if (formSection) formSection.classList.remove('hidden'); 
             if (closedSystemMessage) closedSystemMessage.classList.add('hidden'); 
-            
-            const tabFormBtn = document.getElementById('tabForm');
             if (tabFormBtn) {
                 tabFormBtn.disabled = false;
                 tabFormBtn.classList.remove('opacity-50', 'cursor-not-allowed');
@@ -357,17 +284,12 @@ async function loadInitialReferenceData() {
         showLoading(true, 'กำลังโหลดข้อมูลหน่วยงาน สปส....');
         const res = await API.call('apiGetInitialData');
         showLoading(false);
-        
         if (res && res.success && res.data && res.data.branches) {
             AppState.branches = res.data.branches;
             populateBranchDropdown(res.data.branches);
-        } else {
-            showAlert('error', 'ไม่สามารถโหลดข้อมูลหน่วยงาน สปส. ได้');
-            console.error("Data error:", res);
         }
     } catch (err) {
-        showLoading(false);
-        showAlert('error', 'ข้อผิดพลาดเครือข่าย: ' + err.message);
+        showLoading(false); showAlert('error', 'ข้อผิดพลาดเครือข่าย: ' + err.message);
     }
 }
 
@@ -391,12 +313,9 @@ async function handleBranchChange(branchCode) {
 
   if (!branchCode) {
     stationSelect.disabled = true;
-    stationSelect.classList.add('bg-govgray-100', 'text-govgray-500', 'cursor-not-allowed');
-    stationSelect.classList.remove('bg-white', 'text-govgray-900');
     stationSelect.innerHTML = '<option value="">-- กรุณาเลือกรหัส สปส. ก่อน --</option>';
     return;
   }
-
   showLoading(true, 'กำลังดึงข้อมูลสถานที่เลือกตั้ง...');
   stationSelect.disabled = true;
   stationSelect.innerHTML = '<option value="">-- กำลังโหลดข้อมูล... --</option>';
@@ -404,19 +323,12 @@ async function handleBranchChange(branchCode) {
   try {
       const res = await API.call('apiGetStationsByBranch', branchCode); 
       showLoading(false);
-      
       if (res && res.success) {
-        const stations = res.data.stations || [];
-        AppState.stationsCache.set(branchCode, stations); 
-        populateStationDropdown(stations);
-      } else {
-        showAlert('error', res ? res.message : 'ไม่สามารถโหลดข้อมูลสถานที่เลือกตั้งได้');
-        stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาดในการโหลดข้อมูล --</option>';
+        AppState.stationsCache.set(branchCode, res.data.stations || []); 
+        populateStationDropdown(res.data.stations || []);
       }
   } catch (err) {
-      showLoading(false);
-      showAlert('error', 'ระบบขัดข้อง: ' + err.message);
-      stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาด --</option>';
+      showLoading(false); stationSelect.innerHTML = '<option value="">-- เกิดข้อผิดพลาด --</option>';
   }
 }
 
@@ -424,28 +336,19 @@ function populateStationDropdown(stations) {
   const stationSelect = document.getElementById('pollingStationId');
   if(!stationSelect) return;
   stationSelect.innerHTML = '';
-
   if (stations.length === 0) {
     stationSelect.disabled = true;
-    stationSelect.classList.add('bg-govgray-100', 'text-govgray-500', 'cursor-not-allowed');
-    stationSelect.classList.remove('bg-white', 'text-govgray-900');
     stationSelect.innerHTML = '<option value="">-- ไม่พบสถานที่เลือกตั้งในสังกัดนี้ --</option>';
     return;
   }
-
   stationSelect.disabled = false;
-  stationSelect.classList.remove('bg-govgray-100', 'text-govgray-500', 'cursor-not-allowed');
   stationSelect.classList.add('bg-white', 'text-govgray-900');
   
   const defaultOpt = document.createElement('option');
-  defaultOpt.value = '';
-  defaultOpt.textContent = `-- เลือกรหัสสถานที่เลือกตั้ง (${stations.length} แห่ง) --`;
+  defaultOpt.value = ''; defaultOpt.textContent = `-- เลือกรหัสสถานที่เลือกตั้ง (${stations.length} แห่ง) --`;
   stationSelect.appendChild(defaultOpt);
-
   stations.forEach(st => {
-    const opt = document.createElement('option');
-    opt.value = st.id;
-    opt.textContent = `${st.id} : ${st.name} - ${st.location}`;
+    const opt = document.createElement('option'); opt.value = st.id; opt.textContent = `${st.id} : ${st.name} - ${st.location}`;
     stationSelect.appendChild(opt);
   });
 }
@@ -453,11 +356,7 @@ function populateStationDropdown(stations) {
 function handleStationChange(stationId) {
   const branchCode = document.getElementById('ssoBranchCode').value;
   const detailBox = document.getElementById('stationDetailBox');
-
-  if (!stationId || !branchCode) {
-    if(detailBox) detailBox.classList.add('hidden');
-    return;
-  }
+  if (!stationId || !branchCode) { if(detailBox) detailBox.classList.add('hidden'); return; }
 
   const stations = AppState.stationsCache.get(branchCode) || [];
   const selected = stations.find(s => s.id === stationId);
@@ -469,13 +368,11 @@ function handleStationChange(stationId) {
     document.getElementById('detailAmphur').textContent = selected.amphur || '-';
     document.getElementById('detailProvince').textContent = selected.province || '-';
     detailBox.classList.remove('hidden');
-  } else {
-    if(detailBox) detailBox.classList.add('hidden');
   }
 }
 
 // ==========================================
-// 6. ฟังก์ชันค้นหาสถานะคำขอ 
+// 7. ระบบตรวจสอบสถานะ
 // ==========================================
 async function searchStatus() {
   try {
@@ -483,43 +380,27 @@ async function searchStatus() {
       const searchResultArea = document.getElementById('searchResultArea');
       if (searchResultArea) searchResultArea.classList.add('hidden');
       
-      const reqIdInput = document.getElementById('searchReqId');
-      const phoneInput = document.getElementById('searchPhone');
-      const captchaInput = document.getElementById('searchCaptcha');
+      const reqId = document.getElementById('searchReqId').value.trim();
+      const phone = document.getElementById('searchPhone').value.trim();
+      const userCaptcha = document.getElementById('searchCaptcha').value.trim();
 
-      const reqId = reqIdInput ? reqIdInput.value.trim() : '';
-      const phone = phoneInput ? phoneInput.value.trim() : '';
-      const userCaptcha = captchaInput ? captchaInput.value.trim() : '';
-
-      if (!reqId || !phone) {
-          return showAlert('error', 'กรุณากรอกรหัสคำขอและเบอร์โทรศัพท์ให้ครบถ้วน');
-      }
-      
+      if (!reqId || !phone) return showAlert('error', 'กรุณากรอกรหัสคำขอและเบอร์โทรศัพท์ให้ครบถ้วน');
       if (!userCaptcha || userCaptcha !== captchaAnswer) {
           showAlert('error', 'ยืนยันตัวตนไม่ผ่าน ข้อความที่คุณพิมพ์ไม่ตรงกับภาพ กรุณาลองใหม่อีกครั้ง');
-          generateCaptcha(); 
-          return;
+          generateCaptcha(); return;
       }
-
       showLoading(true, 'กำลังค้นหาข้อมูล...');
-
       const res = await API.call('apiCheckStatus', { requestId: reqId, phone: phone });
       handleStatusSuccess(res);
-      
-  } catch (error) {
-      showLoading(false);
-      showAlert('error', 'ข้อผิดพลาดเครือข่าย: ' + error.message);
-  }
+  } catch (error) { showLoading(false); showAlert('error', 'ระบบขัดข้อง: ' + error.message); }
 }
 
 function handleStatusSuccess(res) {
     showLoading(false);
     generateCaptcha(); 
-    
     const searchResultArea = document.getElementById('searchResultArea');
     if (res && res.success && res.data) {
         if (searchResultArea) searchResultArea.classList.remove('hidden');
-        
         const d = res.data.data;
         const actualStatus = d.status ? String(d.status).trim() : ''; 
         
@@ -532,46 +413,25 @@ function handleStatusSuccess(res) {
         
         if (actualStatus === 'Approved' || actualStatus === 'อนุมัติแล้ว' || actualStatus === 'อนุมัติ' || res.data.isApproved) {
             if (resultApproved) resultApproved.classList.remove('hidden');
-            
-            if (resStatusEl) {
-                resStatusEl.textContent = actualStatus;
-                resStatusEl.style.color = '#198754';
-                resStatusEl.style.backgroundColor = '#d1e7dd';
-            }
-
+            if (resStatusEl) { resStatusEl.textContent = actualStatus; resStatusEl.style.color = '#198754'; resStatusEl.style.backgroundColor = '#d1e7dd'; }
             if (document.getElementById('resUsername')) document.getElementById('resUsername').textContent = d.username || '-';
             
             const resPasswordEl = document.getElementById('resPassword');
             const btnToggle = document.getElementById('btnTogglePassword');
-            
             if (resPasswordEl) {
-                // 🟢 เก็บ Password ไว้ใน AppStateStatus แทนการฝังใน DOM
                 AppStateStatus.retrievedPassword = d.password || ''; 
                 resPasswordEl.textContent = '••••••••';
                 AppStateStatus.isPasswordVisible = false;
-                
-                if (AppStateStatus.retrievedPassword) {
-                    if(btnToggle) btnToggle.classList.remove('hidden'); 
-                } else {
-                    if(btnToggle) btnToggle.classList.add('hidden'); 
-                }
-                
-                const iconEyeOff = document.getElementById('iconEyeOff');
-                const iconEyeOn = document.getElementById('iconEyeOn');
-                if (iconEyeOff) iconEyeOff.classList.remove('hidden');
-                if (iconEyeOn) iconEyeOn.classList.add('hidden');
+                if (AppStateStatus.retrievedPassword) { if(btnToggle) btnToggle.classList.remove('hidden'); } 
+                else { if(btnToggle) btnToggle.classList.add('hidden'); }
+                if (document.getElementById('iconEyeOff')) document.getElementById('iconEyeOff').classList.remove('hidden');
+                if (document.getElementById('iconEyeOn')) document.getElementById('iconEyeOn').classList.add('hidden');
             }
             
             const rowRemark = document.getElementById('rowRemark');
             if (rowRemark) {
-                if (d.remark) {
-                    document.getElementById('resRemark').textContent = d.remark;
-                    rowRemark.classList.remove('hidden');
-                    rowRemark.classList.add('grid'); 
-                } else {
-                    rowRemark.classList.add('hidden');
-                    rowRemark.classList.remove('grid');
-                }
+                if (d.remark) { document.getElementById('resRemark').textContent = d.remark; rowRemark.classList.remove('hidden'); rowRemark.classList.add('grid'); } 
+                else { rowRemark.classList.add('hidden'); rowRemark.classList.remove('grid'); }
             }
 
             if (document.getElementById('resCitizenId')) document.getElementById('resCitizenId').textContent = maskCitizenIdForSearch(d.citizenId);
@@ -582,36 +442,34 @@ function handleStatusSuccess(res) {
             if (document.getElementById('resSso')) document.getElementById('resSso').textContent = d.ssoBranchDisplay;
             if (document.getElementById('resStation')) document.getElementById('resStation').textContent = d.pollingStationDisplay;
 
-        } else if (actualStatus === 'ไม่อนุมัติ' || actualStatus === 'Rejected') {
+        } else if (actualStatus === 'ไม่อนุมัติ' || actualStatus === 'Rejected' || actualStatus === 'ยกเลิก') {
             if (resultPending) {
                 resultPending.classList.remove('hidden');
                 resultPending.className = "mt-6 p-0 border border-red-300 rounded-lg overflow-hidden"; 
-                
-                const remarkText = d.remark || 'ไม่ได้ระบุสาเหตุ (กรุณาติดต่อเจ้าหน้าที่)';
+                const remarkText = d.remark || 'ไม่ได้ระบุสาเหตุ';
+                const statusHead = actualStatus === 'ยกเลิก' ? 'คำขอนี้ถูกยกเลิกแล้ว' : 'คำขอไม่ผ่านการอนุมัติ';
                 
                 resultPending.innerHTML = `
                     <div style="background-color: #f8d7da; padding: 15px 20px; display: flex; align-items: center; border-bottom: 1px solid #f5c2c7;">
                         <div style="background-color: #dc3545; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; justify-content: center; align-items: center; margin-right: 12px; font-weight: bold; font-size: 14px;">✕</div>
-                        <strong style="margin: 0; color: #842029; font-size: 16px;">คำขอไม่ผ่านการอนุมัติ</strong>
+                        <strong style="margin: 0; color: #842029; font-size: 16px;">${statusHead}</strong>
                     </div>
                     <div style="padding: 20px; background-color: #ffffff;">
                         <div style="display: flex; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #f1f3f5;">
                             <strong style="width: 130px; color: #dc3545; font-size: 15px;">สถานะ:</strong> 
-                            <span style="color: #212529; font-size: 15px;">ไม่อนุมัติ (Rejected)</span>
+                            <span style="color: #212529; font-size: 15px;">${actualStatus}</span>
                         </div>
                         <div style="display: flex;">
-                            <strong style="width: 130px; color: #6c757d; font-size: 15px;">สาเหตุที่ไม่อนุมัติ:</strong> 
+                            <strong style="width: 130px; color: #6c757d; font-size: 15px;">หมายเหตุ:</strong> 
                             <span style="color: #212529; font-size: 15px;">${remarkText}</span>
                         </div>
                     </div>
                 `;
             }
-
         } else {
             if (resultPending) {
                 resultPending.classList.remove('hidden');
                 resultPending.className = "mt-6 p-0 border border-yellow-300 rounded-lg overflow-hidden"; 
-                
                 resultPending.innerHTML = `
                     <div style="background-color: #fff3cd; padding: 15px 20px; display: flex; align-items: center; border-bottom: 1px solid #ffeeba;">
                         <div style="background-color: #ffc107; color: #000; border-radius: 50%; width: 24px; height: 24px; display: flex; justify-content: center; align-items: center; margin-right: 12px; font-weight: bold; font-size: 14px;">!</div>
@@ -619,323 +477,180 @@ function handleStatusSuccess(res) {
                     </div>
                     <div style="padding: 20px; background-color: #ffffff; text-align: center;">
                         <p style="color: #6c757d; font-size: 15px; margin-bottom: 10px;">สำนักงานประกันสังคมได้รับคำขอของท่านแล้ว ขณะนี้อยู่ระหว่างขั้นตอนการตรวจสอบเอกสาร</p>
-                        <p style="color: #6c757d; font-size: 15px; font-weight: 500;">หากมีข้อสงสัย โทร. 02-956-2357, 56, 62</p>
                     </div>
                 `;
             }
         }
-
-    } else {
-        showAlert('error', res.message || 'ไม่พบข้อมูลคำขอ กรุณาตรวจสอบรหัสอ้างอิงและเบอร์โทรศัพท์อีกครั้ง');
-    }
+    } else { showAlert('error', res.message || 'ไม่พบข้อมูลคำขอ กรุณาตรวจสอบรหัสและเบอร์โทรศัพท์'); }
 }
 
-function handleStatusError(err) {
-    showLoading(false);
+function clearStatusForm() {
+    hideAlert();
+    const searchResultArea = document.getElementById('searchResultArea');
+    if (searchResultArea) searchResultArea.classList.add('hidden');
+
+    if (document.getElementById('searchReqId')) document.getElementById('searchReqId').value = '';
+    if (document.getElementById('searchPhone')) document.getElementById('searchPhone').value = '';
+    if (document.getElementById('searchCaptcha')) document.getElementById('searchCaptcha').value = '';
+
+    const lookupInput = document.getElementById('lookupCitizenId');
+    if (lookupInput) { lookupInput.value = ''; lookupInput.dataset.raw = ''; }
+    if (document.getElementById('lookupPhone')) document.getElementById('lookupPhone').value = '';
+    AppStateStatus.rawCitizenId = '';
+    AppStateStatus.retrievedPassword = '';
+
     generateCaptcha();
-    showAlert('error', 'เกิดข้อผิดพลาดในการเชื่อมต่อ: ' + err.message);
 }
 
-
-// ==========================================
-// 7. ระบบดูรหัสผ่าน
-// ==========================================
 function togglePasswordVisibility() {
   const resPasswordEl = document.getElementById('resPassword');
   if (!resPasswordEl) return;
-  
-  // 🟢 ดึงรหัสผ่านจาก State แทนการดึงจาก DOM
   const actualPassword = AppStateStatus.retrievedPassword;
   if (!actualPassword) return;
 
   AppStateStatus.isPasswordVisible = !AppStateStatus.isPasswordVisible; 
-  
-  const iconEyeOff = document.getElementById('iconEyeOff');
-  const iconEyeOn = document.getElementById('iconEyeOn');
-  
   if (AppStateStatus.isPasswordVisible) {
       resPasswordEl.textContent = actualPassword;
-      if(iconEyeOff) iconEyeOff.classList.add('hidden');
-      if(iconEyeOn) iconEyeOn.classList.remove('hidden');
+      document.getElementById('iconEyeOff').classList.add('hidden');
+      document.getElementById('iconEyeOn').classList.remove('hidden');
   } else {
       resPasswordEl.textContent = '••••••••';
-      if(iconEyeOff) iconEyeOff.classList.remove('hidden');
-      if(iconEyeOn) iconEyeOn.classList.add('hidden');
+      document.getElementById('iconEyeOff').classList.remove('hidden');
+      document.getElementById('iconEyeOn').classList.add('hidden');
   }
 }
 
 // ==========================================
-// 8. File Handling (รวม PDF)
+// 8. 🔴 ระบบขอยกเลิกการใช้งาน (แท็บที่ 4)
 // ==========================================
-function handleDrop(e) {
-  const dt = e.dataTransfer;
-  if (dt.files.length > 0) processFiles(dt.files);
-}
-
-function handleFileSelection(event) {
-  if (event.target.files.length > 0) processFiles(event.target.files);
-}
-
-async function processFiles(fileList) {
-    const maxSize = 10 * 1024 * 1024; 
-    const validExts = ['pdf', 'jpg', 'jpeg', 'png'];
-    const files = Array.from(fileList);
-    
-    let totalSize = 0;
-    let hasPdf = false;
-    let hasImg = false;
-    let validFiles = [];
-
-    for (let i = 0; i < files.length; i++) {
-        const f = files[i];
-        const ext = f.name.split('.').pop().toLowerCase();
-        
-        if (!validExts.includes(ext)) {
-            showAlert('error', `ระบบไม่รองรับไฟล์สกุล .${ext} (รองรับเฉพาะ PDF, JPG, PNG)`);
-            clearSelectedFile();
-            return;
-        }
-        
-        if (ext === 'pdf') hasPdf = true;
-        else hasImg = true;
-        
-        totalSize += f.size;
-        validFiles.push(f);
-    }
-
-    if (hasPdf && hasImg) {
-        showAlert('error', 'ไม่สามารถแนบไฟล์ PDF ร่วมกับไฟล์รูปภาพได้ กรุณาเลือกประเภทใดประเภทหนึ่ง');
-        clearSelectedFile();
-        return;
-    }
-    if (hasPdf && validFiles.length > 1) {
-        showAlert('error', 'หากเป็นไฟล์ PDF กรุณาแนบเพียง 1 ไฟล์เท่านั้น');
-        clearSelectedFile();
-        return;
-    }
-    if (totalSize > maxSize) {
-        showAlert('error', `ขนาดไฟล์รวมทั้งหมดเกิน 10 MB`);
-        clearSelectedFile();
-        return;
-    }
-
-    showLoading(true, 'กำลังเตรียมไฟล์อัปโหลด...');
-    
-    try {
-        AppState.selectedFiles = [];
-
-        if (hasImg && window.jspdf) {
-            showLoading(true, 'กำลังรวบรวมรูปภาพเป็นไฟล์ PDF...');
-            
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF('p', 'mm', 'a4'); 
-            
-            for (let i = 0; i < validFiles.length; i++) {
-                const imgDataUrl = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = e => resolve(e.target.result);
-                    reader.onerror = e => reject(e);
-                    reader.readAsDataURL(validFiles[i]);
-                });
-                
-                const imgDims = await getImageDimensions(imgDataUrl);
-                const pdfWidth = pdf.internal.pageSize.getWidth();
-                const pdfHeight = pdf.internal.pageSize.getHeight();
-                
-                const ratio = Math.min(pdfWidth / imgDims.width, pdfHeight / imgDims.height);
-                const imgX = (pdfWidth - imgDims.width * ratio) / 2;
-                const imgY = (pdfHeight - imgDims.height * ratio) / 2;
-                
-                if (i > 0) pdf.addPage(); 
-                
-              const imgFormat = validFiles[i].type === 'image/png' ? 'PNG' : 'JPEG';
-              pdf.addImage(imgDataUrl, imgFormat, imgX, imgY, imgDims.width * ratio, imgDims.height * ratio);
-            }
-            
-            const pdfDataUri = pdf.output('datauristring');
-            
-            AppState.selectedFiles = [{
-                filename: `NDA_รอสร้างรหัสคำขอ.pdf`,
-                mimeType: 'application/pdf',
-                base64: pdfDataUri
-            }];
-            
-        } else {
-            const base64Files = await Promise.all(validFiles.map(file => {
-                return new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = e => resolve({ filename: file.name, mimeType: file.type, base64: e.target.result });
-                    reader.onerror = e => reject(e);
-                    reader.readAsDataURL(file);
-                });
-            }));
-            AppState.selectedFiles = base64Files; 
-        }
-        
-        const label = document.getElementById('fileNameLabel');
-        if (AppState.selectedFiles.length === 1) {
-            label.textContent = AppState.selectedFiles[0].filename;
-        } else {
-            label.textContent = `เลือกรูปภาพแล้ว ${AppState.selectedFiles.length} ไฟล์ (ระบบจะรวมเป็น 1 PDF อัตโนมัติ)`;
-        }
-        
-        document.getElementById('selectedFileInfo').classList.remove('hidden');
-        hideAlert();
-        showLoading(false); 
-        
-    } catch (error) {
-        showLoading(false); 
-        showAlert('error', 'เกิดข้อผิดพลาดในการรวบรวมไฟล์ กรุณาลองใหม่อีกครั้ง');
-        clearSelectedFile();
+function setupCancelSystem() {
+    const cancelCitInput = document.getElementById('cancelCitizenId');
+    if (cancelCitInput) {
+        cancelCitInput.addEventListener('input', function(e) {
+            AppStateStatus.cancelRawCitizenId = e.target.value.replace(/\D/g, '').substring(0, 13);
+            e.target.value = AppStateStatus.cancelRawCitizenId;
+        });
+        cancelCitInput.addEventListener('blur', function(e) {
+            if (AppStateStatus.cancelRawCitizenId.length === 13) e.target.value = maskCitizenIdForSearch(AppStateStatus.cancelRawCitizenId);
+        });
+        cancelCitInput.addEventListener('focus', function(e) {
+            if (AppStateStatus.cancelRawCitizenId) e.target.value = AppStateStatus.cancelRawCitizenId;
+        });
     }
 }
 
-function getImageDimensions(dataUrl) {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.onload = () => resolve({ width: img.width, height: img.height });
-        img.src = dataUrl;
-    });
-}
-
-function clearSelectedFile() {
-  const ndaFileInput = document.getElementById('ndaFile');
-  if(ndaFileInput) ndaFileInput.value = ''; 
-  document.getElementById('selectedFileInfo').classList.add('hidden');
-  AppState.selectedFiles = []; 
-}
-
-// ==========================================
-// 9. Validation & Final Submission
-// ==========================================
-function checkCitizenIdChecksum(id) {
-  if (!id || id.length !== 13 || !/^\d{13}$/.test(id)) return false;
-  let sum = 0;
-  for (let i = 0; i < 12; i++) {
-    sum += parseInt(id.charAt(i), 10) * (13 - i);
-  }
-  const checkDigit = (11 - (sum % 11)) % 10;
-  return checkDigit === parseInt(id.charAt(12), 10);
-}
-
-async function handleValidateAndPreview() {
+async function searchCancelInfo() {
   hideAlert();
-
-  const citizenId = document.getElementById('citizenId').value.trim();
-  const firstname = document.getElementById('firstname').value.trim();
-  const lastname = document.getElementById('lastname').value.trim();
-  const firstnameEn = document.getElementById('firstnameEn') ? document.getElementById('firstnameEn').value.trim() : '';
-  const lastnameEn = document.getElementById('lastnameEn') ? document.getElementById('lastnameEn').value.trim() : '';
-  const email = document.getElementById('email').value.trim();
-  const phone = document.getElementById('phone').value.trim();
-  const ssoBranchCode = document.getElementById('ssoBranchCode').value.trim();
-  const pollingStationId = document.getElementById('pollingStationId').value.trim();
-
-  if (!citizenId || !checkCitizenIdChecksum(citizenId)) return showAlert('error', 'เลขประจำตัวประชาชนไม่ถูกต้อง');
-  if (!firstname) return showAlert('error', 'กรุณาระบุชื่อ');
-  if (!lastname) return showAlert('error', 'กรุณาระบุนามสกุล');
-  if (!firstnameEn || !/^[a-z\s]+$/.test(firstnameEn)) return showAlert('error', 'กรุณาระบุชื่อภาษาอังกฤษ (ตัวพิมพ์เล็กเท่านั้น)');
-  if (!lastnameEn || !/^[a-z\s]+$/.test(lastnameEn)) return showAlert('error', 'กรุณาระบุนามสกุลภาษาอังกฤษ (ตัวพิมพ์เล็กเท่านั้น)');
+  const resArea = document.getElementById('cancelResultArea');
+  if (resArea) resArea.classList.add('hidden');
+  const successSec = document.getElementById('cancelSuccessSection');
+  if(successSec) successSec.classList.add('hidden');
   
-  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-  if (!email || !emailRegex.test(email)) return showAlert('error', 'กรุณาระบุรูปแบบอีเมลให้ถูกต้อง');
-  if (!phone || !/^0\d{9}$/.test(phone)) return showAlert('error', 'กรุณาระบุเบอร์โทรศัพท์ 10 หลักขึ้นต้นด้วย 0');
-  if (!ssoBranchCode) return showAlert('error', 'กรุณาเลือกรหัสสำนักงานประกันสังคม (สปส.)');
-  if (!pollingStationId) return showAlert('error', 'กรุณาเลือกรหัสสถานที่เลือกตั้ง');
-  
-  if (AppState.selectedFiles.length === 0) {
-    return showAlert('error', 'กรุณาแนบเอกสารข้อตกลง NDA (PDF 1 ไฟล์ หรือ รูปภาพหลายไฟล์)');
+  const citId = AppStateStatus.cancelRawCitizenId;
+  const phone = document.getElementById('cancelPhone').value.trim();
+  const captcha = document.getElementById('cancelCaptcha').value.trim();
+
+  if (!citId || citId.length !== 13 || !phone) {
+      return showAlert('error', 'กรุณากรอกเลขประจำตัวประชาชน 13 หลัก และเบอร์โทรศัพท์ให้ครบถ้วน');
+  }
+  if (!captcha || captcha !== captchaAnswer) {
+      showAlert('error', 'ยืนยันตัวตนไม่ผ่าน กรุณาพิมพ์ข้อความให้ตรงกับภาพ');
+      generateCaptcha(); return;
   }
 
-  const dummyFileData = AppState.selectedFiles.map(f => ({
-      filename: f.filename,
-      mimeType: f.mimeType,
-      base64: '' 
-  }));
-
-  const payload = {
-    citizenId, firstname, lastname, firstnameEn, lastnameEn, email, phone, ssoBranchCode, pollingStationId,
-    fileData: dummyFileData 
-  };
-
-  showLoading(true, 'กำลังตรวจสอบข้อมูลและความซ้ำซ้อน...');
-  
+  showLoading(true, 'กำลังค้นหาข้อมูลคำขอของคุณ...');
   try {
-      const res = await API.call('apiValidateBeforePreview', payload);
+      const res = await API.call('apiGetCancelInfo', { citizenId: citId, phone: phone });
       showLoading(false);
+      generateCaptcha();
       
       if (res && res.success) {
-        const maskedId = (res.data && res.data.maskedCitizenId) ? res.data.maskedCitizenId : maskCitizenIdForSearch(citizenId);
-        
-        document.getElementById('prevCitizenId').textContent = maskedId;
-        document.getElementById('prevName').textContent = `${maskNameClient(firstname)} ${maskNameClient(lastname)}`;
-        
-        const prevNameEnEl = document.getElementById('prevNameEn');
-        if (prevNameEnEl) prevNameEnEl.textContent = `${maskNameClient(firstnameEn)} ${maskNameClient(lastnameEn)}`;
-
-        document.getElementById('prevEmail').textContent = email;
-        document.getElementById('prevPhone').textContent = phone;
-        document.getElementById('prevSsoBranch').textContent = ssoBranchCode;
-        document.getElementById('prevPollingStation').textContent = pollingStationId;
-        
-        if (AppState.selectedFiles.length === 1) {
-            document.getElementById('prevFileName').textContent = AppState.selectedFiles[0].filename;
-        } else {
-            document.getElementById('prevFileName').textContent = `รูปภาพจำนวน ${AppState.selectedFiles.length} ไฟล์`;
-        }
-
-        toggleModal('previewModal', true);
+          const d = res.data;
+          resArea.classList.remove('hidden');
+          
+          document.getElementById('cancelResReqId').textContent = d.requestId;
+          document.getElementById('cancelResCitizenId').textContent = maskCitizenIdForSearch(d.citizenId);
+          document.getElementById('cancelResName').textContent = `${maskNameText(d.firstname)} ${maskNameText(d.lastname)}`;
+          document.getElementById('cancelResEmail').textContent = maskEmailText(d.email);
+          document.getElementById('cancelResStation').textContent = d.stationDisplay;
+          
+          const statusEl = document.getElementById('cancelResStatus');
+          statusEl.textContent = d.status;
+          
+          const actionBox = document.getElementById('cancelActionBox');
+          const warningBox = document.getElementById('cancelWarningBox');
+          
+          if (d.status === 'ยกเลิก' || d.status === 'ยกเลิกสิทธิ์' || d.status === 'ไม่อนุมัติ') {
+              statusEl.className = "sm:col-span-2 font-bold text-red-600";
+              actionBox.classList.add('hidden');
+              warningBox.classList.remove('hidden');
+          } else {
+              statusEl.className = "sm:col-span-2 font-bold text-emerald-600";
+              actionBox.classList.remove('hidden');
+              warningBox.classList.add('hidden');
+              AppStateStatus.cancelRequestIdToSubmit = d.requestId;
+          }
       } else {
-        showAlert('error', res ? res.message : 'การตรวจสอบข้อมูลไม่ผ่าน');
+          showAlert('error', res.message || 'ไม่พบข้อมูลคำขอ กรุณาตรวจสอบเลขประจำตัวและเบอร์โทรศัพท์');
       }
-  } catch(err) {
+  } catch (error) {
       showLoading(false);
-      showAlert('error', 'ข้อผิดพลาดในการตรวจสอบ: ' + err.message);
+      showAlert('error', 'ระบบขัดข้อง: ' + error.message);
   }
 }
 
-async function handleFinalSubmit() {
-  if (AppState.isSubmitting) return;
-  toggleModal('previewModal', false);
+function confirmCancellation() {
+  const reqId = AppStateStatus.cancelRequestIdToSubmit;
+  const phone = document.getElementById('cancelPhone').value.trim();
+  const citId = AppStateStatus.cancelRawCitizenId;
+  
+  if(!reqId || !phone || !citId) return;
 
-  AppState.isSubmitting = true;
-  showLoading(true, 'กำลังอัปโหลดไฟล์และสร้างคำขอ (อาจใช้เวลาสักครู่)...');
-
-  const payload = {
-    citizenId: document.getElementById('citizenId').value.trim(),
-    firstname: document.getElementById('firstname').value.trim(),
-    lastname: document.getElementById('lastname').value.trim(),
-    firstnameEn: document.getElementById('firstnameEn') ? document.getElementById('firstnameEn').value.trim() : '',
-    lastnameEn: document.getElementById('lastnameEn') ? document.getElementById('lastnameEn').value.trim() : '',
-    email: document.getElementById('email').value.trim(),
-    phone: document.getElementById('phone').value.trim(),
-    ssoBranchCode: document.getElementById('ssoBranchCode').value.trim(),
-    pollingStationId: document.getElementById('pollingStationId').value.trim(),
-    fileData: AppState.selectedFiles 
-  };
-
-  try {
-      const res = await API.call('apiSubmitRequest', payload);
-      showLoading(false);
-      AppState.isSubmitting = false;
-
-      if (res && res.success && res.data) {
-        document.getElementById('displayRequestId').textContent = res.data.requestId;
-        document.getElementById('formSection').classList.add('hidden');
-        document.getElementById('successSection').classList.remove('hidden');
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      } else {
-        showAlert('error', res.message || 'ไม่สามารถส่งคำขอได้ กรุณาลองใหม่อีกครั้ง');
+  Swal.fire({
+      title: 'คุณแน่ใจหรือไม่?',
+      html: 'หากกดยืนยัน <span class="font-bold text-red-600">รหัสผ่านและสิทธิ์การใช้งานของคุณจะถูกระงับทันที</span><br><span class="text-sm text-gray-500">คุณจะต้องยื่นคำขอเข้ามาใหม่หากต้องการใช้งานอีกครั้ง</span>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#dc2626',
+      cancelButtonColor: '#6b7280',
+      confirmButtonText: '<i class="fa-solid fa-triangle-exclamation"></i> ยืนยันการระงับสิทธิ์',
+      cancelButtonText: 'ปิด'
+  }).then(async (result) => {
+      if (result.isConfirmed) {
+          showLoading(true, 'กำลังดำเนินการยกเลิกสิทธิ์...');
+          try {
+              const res = await API.call('apiSubmitCancel', { citizenId: citId, phone: phone });
+              showLoading(false);
+              if (res && res.success) {
+                  document.getElementById('cancelResultArea').classList.add('hidden');
+                  document.getElementById('cancelSuccessSection').classList.remove('hidden');
+              } else {
+                  Swal.fire('เกิดข้อผิดพลาด', res.message, 'error');
+              }
+          } catch (err) {
+              showLoading(false);
+              showAlert('error', 'ระบบขัดข้อง: ' + err.message);
+          }
       }
-  } catch(err) {
-      showLoading(false);
-      AppState.isSubmitting = false;
-      showAlert('error', 'ระบบขัดข้องระหว่างบันทึกข้อมูล: ' + err.message);
-  }
+  });
+}
+
+function clearCancelForm() {
+  hideAlert();
+  if(document.getElementById('cancelResultArea')) document.getElementById('cancelResultArea').classList.add('hidden');
+  if(document.getElementById('cancelSuccessSection')) document.getElementById('cancelSuccessSection').classList.add('hidden');
+  
+  if(document.getElementById('cancelCitizenId')) document.getElementById('cancelCitizenId').value = '';
+  if(document.getElementById('cancelPhone')) document.getElementById('cancelPhone').value = '';
+  if(document.getElementById('cancelCaptcha')) document.getElementById('cancelCaptcha').value = '';
+  
+  AppStateStatus.cancelRawCitizenId = '';
+  AppStateStatus.cancelRequestIdToSubmit = '';
+  generateCaptcha();
 }
 
 // ==========================================
-// 10. Helper Functions ทั่วไป
+// 9. Helper Functions ทั่วไป 
 // ==========================================
 function showAlert(type, message) {
   const alertBox = document.getElementById('alertBox');
@@ -943,7 +658,6 @@ function showAlert(type, message) {
   const alertMsg = document.getElementById('alertMessage');
 
   if(!alertBox) return;
-
   alertMsg.textContent = message;
   alertBox.className = 'mb-6 p-4 rounded-lg border text-sm flex items-start space-x-3 shadow-sm';
 
@@ -954,7 +668,6 @@ function showAlert(type, message) {
     alertBox.classList.add('bg-emerald-50', 'border-emerald-200', 'text-emerald-800');
     alertIcon.innerHTML = `<svg class="w-5 h-5 text-emerald-600" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>`;
   }
-
   alertBox.classList.remove('hidden');
   alertBox.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
@@ -967,13 +680,8 @@ function hideAlert() {
 function toggleModal(modalId, show) {
   const modal = document.getElementById(modalId);
   if(!modal) return;
-  if (show) {
-    modal.classList.remove('hidden');
-    document.body.classList.add('overflow-hidden');
-  } else {
-    modal.classList.add('hidden');
-    document.body.classList.remove('overflow-hidden');
-  }
+  if (show) { modal.classList.remove('hidden'); document.body.classList.add('overflow-hidden'); } 
+  else { modal.classList.add('hidden'); document.body.classList.remove('overflow-hidden'); }
 }
 
 function showLoading(show, text = 'กำลังประมวลผล...') {
@@ -981,81 +689,114 @@ function showLoading(show, text = 'กำลังประมวลผล...') 
   const loadingText = document.getElementById('loadingText');
   if(!overlay) return;
   if(loadingText) loadingText.textContent = text;
-  if (show) overlay.classList.remove('hidden');
-  else overlay.classList.add('hidden');
+  if (show) overlay.classList.remove('hidden'); else overlay.classList.add('hidden');
 }
 
-function copyRequestIdToClipboard() {
-  const reqIdElement = document.getElementById('displayRequestId');
-  if(!reqIdElement) return;
-  const reqId = reqIdElement.textContent.trim();
-  navigator.clipboard.writeText(reqId).then(() => {
-    const copyBtnText = document.getElementById('copyBtnText');
-    if(copyBtnText) copyBtnText.textContent = 'คัดลอกสำเร็จ!';
-    setTimeout(() => {
-      if(copyBtnText) copyBtnText.textContent = 'คัดลอก Request ID';
-    }, 2000);
-  });
-}
-
-function resetAllForms() {
-  const form = document.getElementById('userRequestForm');
-  if(form) form.reset();
-  
-  clearSelectedFile();
-  const detailBox = document.getElementById('stationDetailBox');
-  if(detailBox) detailBox.classList.add('hidden');
-  
-  const stationSelect = document.getElementById('pollingStationId');
-  if(stationSelect) {
-    stationSelect.disabled = true;
-    stationSelect.classList.add('bg-govgray-100', 'text-govgray-500', 'cursor-not-allowed');
-    stationSelect.classList.remove('bg-white', 'text-govgray-900');
-    stationSelect.innerHTML = '<option value="">-- กรุณาเลือกรหัส สปส. ก่อน --</option>';
-  }
-
-  const successSec = document.getElementById('successSection');
-  const formSec = document.getElementById('formSection');
-  if(successSec) successSec.classList.add('hidden');
-  if(formSec) formSec.classList.remove('hidden');
-  
-  hideAlert();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-}
-
-function clearStatusForm() {
-    hideAlert();
-    const searchResultArea = document.getElementById('searchResultArea');
-    if (searchResultArea) searchResultArea.classList.add('hidden');
-
-    const searchReqId = document.getElementById('searchReqId');
-    const searchPhone = document.getElementById('searchPhone');
-    const searchCaptcha = document.getElementById('searchCaptcha');
-    
-    if (searchReqId) searchReqId.value = '';
-    if (searchPhone) searchPhone.value = '';
-    if (searchCaptcha) searchCaptcha.value = '';
-
-    const lookupInput = document.getElementById('lookupCitizenId');
-    const lookupPhone = document.getElementById('lookupPhone');
-    if (lookupInput) { lookupInput.value = ''; lookupInput.dataset.raw = ''; }
-    if (lookupPhone) lookupPhone.value = '';
-    AppStateStatus.rawCitizenId = '';
-    AppStateStatus.retrievedPassword = '';
-
-    generateCaptcha();
-}
-
-function maskNameClient(text) {
+function maskNameText(text) {
   if (!text) return '-';
-  const cleanText = text.trim();
-  if (cleanText.length <= 1) return cleanText + '***';
-  const firstChar = cleanText.charAt(0);
-  const maskLength = cleanText.length > 4 ? 4 : cleanText.length - 1;
-  return firstChar + '*'.repeat(maskLength);
+  const clean = text.trim();
+  if (clean.length <= 1) return clean + '***';
+  const first = clean.charAt(0);
+  const stars = clean.length > 4 ? 4 : clean.length - 1;
+  return first + '*'.repeat(stars);
+}
+
+function maskEmailText(email) {
+  if (!email || !email.includes('@')) return maskNameText(email);
+  const parts = email.split('@');
+  return parts[0].charAt(0) + '***@' + parts[1];
 }
 
 function maskCitizenIdForSearch(id) {
   if (!id || id.length !== 13) return id;
   return `${id.substring(0, 1)}-XXXX-XXXXX-${id.substring(10, 12)}-${id.substring(12, 13)}`;
 }
+
+// ==========================================
+// 10. ระบบไฟล์และการคำนวณ Validation (หน้ายื่นคำขอ)
+// ==========================================
+function handleDrop(e) { const dt = e.dataTransfer; if (dt.files.length > 0) processFiles(dt.files); }
+function handleFileSelection(event) { if (event.target.files.length > 0) processFiles(event.target.files); }
+async function processFiles(fileList) {
+    const validExts = ['pdf', 'jpg', 'jpeg', 'png']; const files = Array.from(fileList);
+    let totalSize = 0; let hasPdf = false; let hasImg = false; let validFiles = [];
+    for (let i = 0; i < files.length; i++) {
+        const ext = files[i].name.split('.').pop().toLowerCase();
+        if (!validExts.includes(ext)) { showAlert('error', `ไม่รองรับไฟล์ .${ext}`); clearSelectedFile(); return; }
+        if (ext === 'pdf') hasPdf = true; else hasImg = true;
+        totalSize += files[i].size; validFiles.push(files[i]);
+    }
+    if (hasPdf && hasImg) { showAlert('error', 'ห้ามแนบ PDF ปนกับรูปภาพ'); clearSelectedFile(); return; }
+    if (totalSize > 10 * 1024 * 1024) { showAlert('error', `ขนาดเกิน 10 MB`); clearSelectedFile(); return; }
+
+    showLoading(true, 'กำลังเตรียมไฟล์อัปโหลด...');
+    try {
+        if (hasImg && window.jspdf) {
+            const { jsPDF } = window.jspdf; const pdf = new jsPDF('p', 'mm', 'a4'); 
+            for (let i = 0; i < validFiles.length; i++) {
+                const imgDataUrl = await new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res(e.target.result); r.onerror = rej; r.readAsDataURL(validFiles[i]); });
+                const imgDims = await getImageDimensions(imgDataUrl);
+                const ratio = Math.min(pdf.internal.pageSize.getWidth() / imgDims.width, pdf.internal.pageSize.getHeight() / imgDims.height);
+                if (i > 0) pdf.addPage(); 
+                pdf.addImage(imgDataUrl, validFiles[i].type === 'image/png' ? 'PNG' : 'JPEG', (pdf.internal.pageSize.getWidth() - imgDims.width * ratio) / 2, (pdf.internal.pageSize.getHeight() - imgDims.height * ratio) / 2, imgDims.width * ratio, imgDims.height * ratio);
+            }
+            AppState.selectedFiles = [{ filename: `NDA_รอสร้างรหัสคำขอ.pdf`, mimeType: 'application/pdf', base64: pdf.output('datauristring') }];
+        } else {
+            AppState.selectedFiles = await Promise.all(validFiles.map(file => new Promise((res, rej) => { const r = new FileReader(); r.onload = e => res({ filename: file.name, mimeType: file.type, base64: e.target.result }); r.onerror = rej; r.readAsDataURL(file); }))); 
+        }
+        document.getElementById('fileNameLabel').textContent = AppState.selectedFiles.length === 1 ? AppState.selectedFiles[0].filename : `เลือก ${AppState.selectedFiles.length} ไฟล์`;
+        document.getElementById('selectedFileInfo').classList.remove('hidden');
+        showLoading(false); 
+    } catch (e) { showLoading(false); showAlert('error', 'รวบรวมไฟล์ล้มเหลว'); clearSelectedFile(); }
+}
+function getImageDimensions(url) { return new Promise(res => { const img = new Image(); img.onload = () => res({ width: img.width, height: img.height }); img.src = url; }); }
+function clearSelectedFile() { if(document.getElementById('ndaFile')) document.getElementById('ndaFile').value = ''; document.getElementById('selectedFileInfo').classList.add('hidden'); AppState.selectedFiles = []; }
+function checkCitizenIdChecksum(id) {
+  if (!id || id.length !== 13 || !/^\d{13}$/.test(id)) return false;
+  let sum = 0; for (let i = 0; i < 12; i++) sum += parseInt(id.charAt(i), 10) * (13 - i);
+  return (11 - (sum % 11)) % 10 === parseInt(id.charAt(12), 10);
+}
+
+async function handleValidateAndPreview() {
+  hideAlert();
+  const p = { citizenId: document.getElementById('citizenId').value.trim(), firstname: document.getElementById('firstname').value.trim(), lastname: document.getElementById('lastname').value.trim(), firstnameEn: document.getElementById('firstnameEn') ? document.getElementById('firstnameEn').value.trim() : '', lastnameEn: document.getElementById('lastnameEn') ? document.getElementById('lastnameEn').value.trim() : '', email: document.getElementById('email').value.trim(), phone: document.getElementById('phone').value.trim(), ssoBranchCode: document.getElementById('ssoBranchCode').value.trim(), pollingStationId: document.getElementById('pollingStationId').value.trim() };
+  if (!p.citizenId || !checkCitizenIdChecksum(p.citizenId)) return showAlert('error', 'เลขบัตรประชาชนไม่ถูกต้อง');
+  if (!p.firstname || !p.lastname) return showAlert('error', 'กรุณาระบุชื่อ-นามสกุล');
+  if (!p.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(p.email)) return showAlert('error', 'อีเมลไม่ถูกต้อง');
+  if (!p.phone || !/^0\d{9}$/.test(p.phone)) return showAlert('error', 'เบอร์โทรศัพท์ 10 หลัก');
+  if (!p.ssoBranchCode || !p.pollingStationId) return showAlert('error', 'เลือกรหัสสถานที่');
+  if (AppState.selectedFiles.length === 0) return showAlert('error', 'กรุณาแนบ NDA');
+  
+  showLoading(true, 'ตรวจสอบข้อมูล...');
+  try {
+      const res = await API.call('apiValidateBeforePreview', { ...p, fileData: AppState.selectedFiles.map(f => ({filename: f.filename, mimeType: f.mimeType, base64: ''})) });
+      showLoading(false);
+      if (res && res.success) {
+        document.getElementById('prevCitizenId').textContent = res.data.maskedCitizenId || maskCitizenIdForSearch(p.citizenId);
+        document.getElementById('prevName').textContent = `${maskNameText(p.firstname)} ${maskNameText(p.lastname)}`;
+        if (document.getElementById('prevNameEn')) document.getElementById('prevNameEn').textContent = `${maskNameText(p.firstnameEn)} ${maskNameText(p.lastnameEn)}`;
+        document.getElementById('prevEmail').textContent = p.email; document.getElementById('prevPhone').textContent = p.phone;
+        document.getElementById('prevSsoBranch').textContent = p.ssoBranchCode; document.getElementById('prevPollingStation').textContent = p.pollingStationId;
+        document.getElementById('prevFileName').textContent = AppState.selectedFiles.length === 1 ? AppState.selectedFiles[0].filename : `รูปภาพ ${AppState.selectedFiles.length} ไฟล์`;
+        toggleModal('previewModal', true);
+      } else { showAlert('error', res.message); }
+  } catch(err) { showLoading(false); showAlert('error', err.message); }
+}
+
+async function handleFinalSubmit() {
+  if (AppState.isSubmitting) return; toggleModal('previewModal', false); AppState.isSubmitting = true;
+  showLoading(true, 'กำลังอัปโหลดและสร้างคำขอ...');
+  const p = { citizenId: document.getElementById('citizenId').value.trim(), firstname: document.getElementById('firstname').value.trim(), lastname: document.getElementById('lastname').value.trim(), firstnameEn: document.getElementById('firstnameEn') ? document.getElementById('firstnameEn').value.trim() : '', lastnameEn: document.getElementById('lastnameEn') ? document.getElementById('lastnameEn').value.trim() : '', email: document.getElementById('email').value.trim(), phone: document.getElementById('phone').value.trim(), ssoBranchCode: document.getElementById('ssoBranchCode').value.trim(), pollingStationId: document.getElementById('pollingStationId').value.trim(), fileData: AppState.selectedFiles };
+  try {
+      const res = await API.call('apiSubmitRequest', p);
+      showLoading(false); AppState.isSubmitting = false;
+      if (res && res.success) {
+        document.getElementById('displayRequestId').textContent = res.data.requestId;
+        document.getElementById('formSection').classList.add('hidden'); document.getElementById('successSection').classList.remove('hidden'); window.scrollTo(0,0);
+      } else showAlert('error', res.message);
+  } catch(e) { showLoading(false); AppState.isSubmitting = false; showAlert('error', e.message); }
+}
+
+function copyRequestIdToClipboard() { const r = document.getElementById('displayRequestId'); if(r) navigator.clipboard.writeText(r.textContent.trim()).then(() => { const b = document.getElementById('copyBtnText'); if(b) { b.textContent = 'คัดลอกสำเร็จ!'; setTimeout(() => b.textContent = 'คัดลอก Request ID', 2000); }}); }
+
+function resetAllForms() { if(document.getElementById('userRequestForm')) document.getElementById('userRequestForm').reset(); clearSelectedFile(); const s = document.getElementById('pollingStationId'); if(s) { s.disabled = true; s.innerHTML = '<option>-- เลือกรหัส สปส. ก่อน --</option>'; } document.getElementById('successSection').classList.add('hidden'); document.getElementById('formSection').classList.remove('hidden'); window.scrollTo(0,0); }
